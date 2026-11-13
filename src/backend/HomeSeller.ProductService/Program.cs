@@ -1,13 +1,16 @@
 using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
+using ConsoleApp1;
 using HomeSellerServer.Interface;
 using HomeSellerServer.Module;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
+using ProductService.Interface;
 using ProductService.Module;
 using ProductService.Services;
 using ProductService.StoreService;
@@ -53,6 +56,7 @@ builder.Services.AddMassTransit(x =>
 });
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(configOptions));
+builder.Services.AddTransient<ImagesSystem>();
 builder.Services.AddTransient<IProductStore, ProductStore>();
 builder.Services.AddTransient<IProductService, ProductService.Services.ProductService>();
 
@@ -81,6 +85,7 @@ var app = builder.Build();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
@@ -104,7 +109,14 @@ using (var scope = app.Services.CreateScope())
         }
     }
 }
+var imageStorePath = Path.Combine(builder.Environment.ContentRootPath, "imageStore");
+Directory.CreateDirectory(imageStorePath);
 
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(imageStorePath),
+    RequestPath = "/imageStore"
+});
 app.MapGet("/", () => "Hello World!");
 
 app.Run();

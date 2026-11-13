@@ -1,9 +1,11 @@
 ﻿using System.Security.Claims;
+using ConsoleApp1;
 using HomeSellerServer.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using ProductService.DTO.Products;
+using Superpower.Model;
 
 namespace ProductService.Controllers;
 
@@ -13,10 +15,13 @@ namespace ProductService.Controllers;
 [EnableRateLimiting("sliding_window")]
 public class ProductController : ControllerBase
 {
+    
     private readonly IProductService _productService;
+    private readonly ImagesSystem _imagesSystem;
 
-    public ProductController(IProductService productService)
+    public ProductController(IProductService productService, ImagesSystem imagesSystem)
     {
+        _imagesSystem = imagesSystem;
         _productService = productService;
     }
 
@@ -41,6 +46,37 @@ public class ProductController : ControllerBase
         }
     }
 
+    [HttpPost("upload")]
+    [ProducesResponseType(typeof(List<string>), 200)]
+    public async Task<IActionResult> Upload([FromForm] List<IFormFile> files)
+    {
+        if (files == null || files.Count == 0)
+        {
+            return BadRequest(ModelState);
+        }
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+        try
+        {
+            
+
+            var uploadedurls = new List<string>();
+            foreach (var file in files)
+            {
+                
+                var url= await _imagesSystem.SaveImageAsync(file);
+                uploadedurls.Add(url);
+            }
+            return Ok(uploadedurls);
+        }catch(Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        
+        
+    }
     [HttpGet("GetProducts")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(ProductsResponse), 200)]
@@ -61,6 +97,7 @@ public class ProductController : ControllerBase
             return BadRequest(ex.Message);
         }
     }
+
 
     [HttpPost("AddProduct")]
     [ProducesResponseType(typeof(ProductsResponse), 200)]

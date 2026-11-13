@@ -2,6 +2,7 @@
 using HomeSellerServer.Interface;
 using HomeSellerServer.Module;
 using Microsoft.EntityFrameworkCore;
+using ProductService.Interface;
 using ProductService.Module;
 
 
@@ -71,15 +72,13 @@ public class ProductStore : IProductStore
         return false;
     }
 
-    public async Task ProductsAddAsync(Guid UserId, Products products)
+    public async Task ProductsAddAsync( Products products)
     {
-        var product = await _dbcontext.Products.FirstOrDefaultAsync(p => p.UserId == UserId);
-        if (product != null)
-        {
             products.CreateAt = DateTime.UtcNow;
+            products.isDeleted = false;
             await _dbcontext.Products.AddAsync(products);
             await _dbcontext.SaveChangesAsync();
-        }
+        
     }
 
     public async Task<IEnumerable<Products>> GetProductsByIdsAsync(IEnumerable<Guid> ids)
@@ -116,8 +115,16 @@ public class ProductStore : IProductStore
 
         if (products.ImageURLs != null)
         {
-            _dbcontext.Set<ProductImage>().RemoveRange(products.ImageURLs);
-            existingProduct.ImageURLs = products.ImageURLs;
+            var newurl = products.ImageURLs.Select(img=>img.ImageURL).ToHashSet();
+            var currenturl = existingProduct.ImageURLs.Select(img => img.ImageURL).ToHashSet();
+            var imagestoremove = existingProduct.ImageURLs.Where(img=> !newurl.Contains(img.ImageURL)).ToList();
+            _dbcontext.Set<ProductImage>().RemoveRange(imagestoremove);
+            var imagestoadd = products.ImageURLs.Where(img => !currenturl.Contains(img.ImageURL)).ToList();
+            foreach (var img in imagestoadd)
+            {
+                img.ProductId = products.Id;
+                existingProduct.ImageURLs.Add(img);
+            }
         }
 
         if (products.ProductTags != null)

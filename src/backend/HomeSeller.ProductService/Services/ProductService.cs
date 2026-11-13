@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using ConsoleApp1;
 using HomeSeller.Shared.CacheHelper;
 using HomeSeller.Shared.EventProduct;
 using HomeSellerServer.Interface;
@@ -6,6 +7,7 @@ using HomeSellerServer.Module;
 using ProductService.Module;
 using MassTransit;
 using ProductService.DTO.Products;
+using ProductService.Interface;
 using StackExchange.Redis;
 
 namespace ProductService.Services;
@@ -17,10 +19,12 @@ public class ProductService : IProductService
     private readonly ILogger<ProductService> _logger;
     private readonly IDatabase _redis;
     private readonly TimeSpan? _cacheExpiry = TimeSpan.FromHours(1);
+    private readonly ImagesSystem _imagesSystem;
 
-    public ProductService(IProductStore productStore, IPublishEndpoint publishEndpoint, ILogger<ProductService> logger,
+    public ProductService(ImagesSystem imagesSystem, IProductStore productStore, IPublishEndpoint publishEndpoint, ILogger<ProductService> logger,
         IConnectionMultiplexer muxer)
     {
+        _imagesSystem = imagesSystem;
         _redis = muxer.GetDatabase();
         _logger = logger;
         _publishEndpoint = publishEndpoint;
@@ -44,11 +48,12 @@ public class ProductService : IProductService
         var products = await _productStore.GetProducts(search);
 
         var productsresponse = products.Select(MapToResponse).ToList();
-
+   
         await CacheHelper.SetCacheAsync(_redis, _logger, productsresponse, cachekey, _cacheExpiry);
 
         timer.Stop();
         _logger.LogInformation($"get no cache - {timer.ElapsedMilliseconds}");
+
         return productsresponse;
     }
 
@@ -65,13 +70,14 @@ public class ProductService : IProductService
         var product = await _productStore.GetProductsIdAsync(id);
         var productresponse = MapToResponse(product);
         await CacheHelper.SetCacheAsync(_redis, _logger, productresponse, cachekey, _cacheExpiry);
+        await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:All");
         return productresponse;
     }
 
     public async Task<ProductsResponse> CreateProductAsync(Guid userId, ProductsRequest request)
     {
         var newProductId = Guid.NewGuid();
-
+ 
         var product = new Products
         {
             Id = newProductId,
@@ -81,7 +87,7 @@ public class ProductService : IProductService
             ConditionId = request.ConditionId,
             UserId = request.UserId,
             CreateAt = DateTime.UtcNow,
-            ImageURLs = request.ImageURLs.Where(img => !string.IsNullOrWhiteSpace(img)).Select(img => new ProductImage
+            ImageURLs = request.ImageURLs?.Where(img => !string.IsNullOrWhiteSpace(img)).Select(img => new ProductImage
             {
                 Id = Guid.NewGuid(),
                 ProductId = newProductId,
@@ -95,8 +101,11 @@ public class ProductService : IProductService
                 TagId = tagId
             }).ToList() ?? new List<ProductTag>()
         };
-
-        await _productStore.ProductsAddAsync(userId, product);
+        
+            
+        
+        await _productStore.ProductsAddAsync( product);
+        await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:All");
         await _publishEndpoint.Publish(new ProductCreatedEvent()
         {
             ProductId = newProductId,
@@ -171,7 +180,8 @@ public class ProductService : IProductService
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:id");
         return true;
     }
-    
+
+ 
     private static ProductsResponse MapToResponse(Products products) => new()
     {
         Id = products.Id,
