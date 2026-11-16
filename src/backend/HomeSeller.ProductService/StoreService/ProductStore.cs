@@ -1,4 +1,5 @@
 ﻿
+using ConsoleApp1;
 using HomeSellerServer.Interface;
 using HomeSellerServer.Module;
 using Microsoft.EntityFrameworkCore;
@@ -12,9 +13,11 @@ namespace ProductService.StoreService;
 public class ProductStore : IProductStore
 {
     private readonly ProductDbContext _dbcontext;
-    public ProductStore(ProductDbContext context)
+    private readonly ImagesSystem _imagesSystem;
+    public ProductStore(ProductDbContext context, ImagesSystem imagesSystem)
     {
 
+        _imagesSystem = imagesSystem;
         this._dbcontext = context;
     }
 
@@ -57,19 +60,31 @@ public class ProductStore : IProductStore
         return product;
     }
 
-    public async Task<bool> DeleteProductAsync(Guid UserId, Guid productId)
-    {
-        var product = await _dbcontext.Products.FirstOrDefaultAsync(p => p.Id == productId && p.UserId == UserId);
-        if (product != null)
+    public async Task<bool> DeleteProductAsync( Guid productId)
+    {      var imageUrls = await _dbcontext.Products
+            .AsNoTracking()
+            .Where(p => p.Id == productId && !p.isDeleted)
+            .SelectMany(p => p.ImageURLs.Select(img => img.ImageURL))
+            .ToListAsync();
+
+     
+        var updatedRows = await _dbcontext.Products
+            .Where(p => p.Id == productId && !p.isDeleted)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(p => p.isDeleted, true) );
+
+      
+        if (updatedRows == 0)
         {
-            product.isDeleted = true;
-            await _dbcontext.SaveChangesAsync();
-            return true;
+            return false;
         }
 
-    
+       
+        if (imageUrls.Count > 0)
+        {
+            _imagesSystem.DeleteImages(imageUrls);
+        }
 
-        return false;
+        return true;
     }
 
     public async Task ProductsAddAsync( Products products)

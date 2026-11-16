@@ -175,7 +175,7 @@ public class ProductService : IProductService
             UserId = userId,
             DeleteAt = DateTime.UtcNow,
         });
-        await _productStore.DeleteProductAsync(userId, productid);
+        await _productStore.DeleteProductAsync( productid);
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:All");
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:id");
         return true;

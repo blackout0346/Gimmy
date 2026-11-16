@@ -69,10 +69,14 @@ public class ImagesSystem
         var filename = Path.GetFileName(relativeImageUrl);
         var clearpath = Path.Combine(safeFolder, filename);
 
-        if (File.Exists(clearpath))
-        {
+     
             File.Delete(clearpath);
-        }
+        
       
+    }
+
+    public void DeleteImages(IEnumerable<string> relativeImageUrl)
+    {
+        Parallel.ForEach(relativeImageUrl, new ParallelOptions { MaxDegreeOfParallelism = 4 }, DeleteImage);
     }
 }
