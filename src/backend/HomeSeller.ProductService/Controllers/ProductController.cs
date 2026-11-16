@@ -1,10 +1,10 @@
 ﻿using System.Security.Claims;
-using ConsoleApp1;
 using HomeSellerServer.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using ProductService.DTO.Products;
+using ProductService.ImagesServices;
 using Superpower.Model;
 
 namespace ProductService.Controllers;

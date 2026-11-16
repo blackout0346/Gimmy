@@ -1,13 +1,10 @@
-﻿using ConsoleApp1;
-using HomeSeller.Shared;
-using HomeSeller.Shared.EventUser;
+﻿using HomeSeller.Shared.EventUser;
 using HomeSellerServer.Module;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
-using ProductService.Module;
+using ProductService.ImagesServices;
 
-
-namespace ProductService.Services;
+namespace ProductService.Consume;
 
 public class UserDeleteConsumer : IConsumer<UserDeletedEvent>
 {

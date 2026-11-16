@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics;
-using ConsoleApp1;
 using HomeSeller.Shared.CacheHelper;
 using HomeSeller.Shared.EventProduct;
 using HomeSellerServer.Interface;
@@ -7,6 +6,7 @@ using HomeSellerServer.Module;
 using ProductService.Module;
 using MassTransit;
 using ProductService.DTO.Products;
+using ProductService.ImagesServices;
 using ProductService.Interface;
 using StackExchange.Redis;
 
@@ -109,6 +109,7 @@ public class ProductService : IProductService
         await _publishEndpoint.Publish(new ProductCreatedEvent()
         {
             ProductId = newProductId,
+            productName = request.NameProduct,
             UserId = request.UserId,
             CreateAt = DateTime.UtcNow,
         });
@@ -143,6 +144,7 @@ public class ProductService : IProductService
             ProductTags = request.TagIds?.Select(tagId => new ProductTag
             {
                 Id = Guid.NewGuid(),
+                
                 ProductId = productid,
                 TagId = tagId
             }).ToList() ?? new List<ProductTag>()
@@ -153,6 +155,7 @@ public class ProductService : IProductService
         await _publishEndpoint.Publish(new ProductUpdatedEvent()
         {
             ProductId = productid,
+            productName = request.NameProduct,
             UserId = request.UserId,
             UpdateAt = DateTime.UtcNow,
         });
@@ -172,6 +175,7 @@ public class ProductService : IProductService
         await _publishEndpoint.Publish(new ProductDeletedEvent()
         {
             ProductId = productid,
+            productName = existing.NameProduct,
             UserId = userId,
             DeleteAt = DateTime.UtcNow,
         });

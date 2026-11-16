@@ -140,7 +140,9 @@ namespace HomeSellerServer.Services
 
             await _publishEndpoint.Publish(new UserDeletedEvent
             {
+                Login =  user.Login,
                 UserId = user.Id,
+                
             });
             await CacheHelper.InvalidateCacheAsync(_redis, _logger, "user:id");
             return true;

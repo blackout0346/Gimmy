@@ -1,8 +1,7 @@
-﻿
-using ConsoleApp1;
-using HomeSellerServer.Interface;
+﻿using HomeSellerServer.Interface;
 using HomeSellerServer.Module;
 using Microsoft.EntityFrameworkCore;
+using ProductService.ImagesServices;
 using ProductService.Interface;
 using ProductService.Module;
 

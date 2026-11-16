@@ -3,6 +3,7 @@
 public class ProductCreatedEvent
 {
     public Guid ProductId { get; set; }
+    public string productName { get; set; }
 
     public Guid UserId { get; set; }
 

@@ -3,7 +3,7 @@
 public class ProductUpdatedEvent
 {
     public Guid ProductId { get; set; }
-
+    public string productName { get; set; }
     public Guid UserId { get; set; }
 
     public DateTime UpdateAt { get; set; } = DateTime.UtcNow;

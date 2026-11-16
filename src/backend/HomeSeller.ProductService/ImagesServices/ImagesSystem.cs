@@ -1,4 +1,4 @@
-namespace ConsoleApp1;
+namespace ProductService.ImagesServices;
 
 public class ImagesSystem
 {

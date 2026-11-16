@@ -1,7 +1,6 @@
 using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
-using ConsoleApp1;
 using HomeSellerServer.Interface;
 using HomeSellerServer.Module;
 using MassTransit;
@@ -10,6 +9,8 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
+using ProductService.Consume;
+using ProductService.ImagesServices;
 using ProductService.Interface;
 using ProductService.Module;
 using ProductService.Services;
