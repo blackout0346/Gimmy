@@ -13,12 +13,13 @@ public class CartService : ICartService
     private readonly ICartStore _cartstore;
     private readonly IDatabase _redis;
     private readonly TimeSpan? _cacheExpiry = TimeSpan.FromHours(1);
-    private readonly ILogger<ICartService> _logger;
+    private readonly ILogger<CartService> _logger;
 
-    public CartService(ICartStore cartstore, IConnectionMultiplexer muxer)
+    public CartService(ILogger<CartService>logger, ICartStore cartstore, IConnectionMultiplexer muxer)
     {
         _redis = muxer.GetDatabase();
         _cartstore = cartstore;
+        _logger = logger;
     }
 
 
@@ -44,7 +45,9 @@ public class CartService : ICartService
             ProductId = request.ProductId,
             Quantity = request.Quantity
         };
+        await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"cart:id:{userId}");
         await _cartstore.AddItemAsync(cartitem, userId);
+      
         var updatedCart = await _cartstore.GetCartByUserIdAsync(userId);
         return MapToResponse(updatedCart, userId);
     }
