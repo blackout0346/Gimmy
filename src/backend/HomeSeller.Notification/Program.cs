@@ -115,9 +115,10 @@ builder.Services.AddMassTransit(x =>
 var app = builder.Build();
 
 app.UseCors("SignalRCorsPolicy");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseRateLimiter();
+
 
 app.MapControllers();
 app.MapHub<NotificationHub>("/NotificationHub");
