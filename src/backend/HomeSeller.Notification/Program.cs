@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using StackExchange.Redis;
-
+using Microsoft.OpenApi;
 DotNetEnv.Env.TraversePath().Load();
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,7 +30,27 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "HomeSeller API", Version = "v1" });
 
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Введите JWT-токен (без слова Bearer, оно подставится автоматически)"
+    });
+
+    // Новый синтаксис для Microsoft.OpenApi v2 / Swashbuckle v10+
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer", document)] = new List<string>()
+    });
+});
 var redisHost = builder.Configuration["Redis:Host"] ?? "localhost";
 var redisPort = builder.Configuration["Redis:Port"] ?? "6379";
 var redisPassword = builder.Configuration["Redis:Password"];
@@ -113,7 +133,11 @@ builder.Services.AddMassTransit(x =>
 });
 
 var app = builder.Build();
-
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 app.UseCors("SignalRCorsPolicy");
 app.UseRateLimiter();
 app.UseAuthentication();
