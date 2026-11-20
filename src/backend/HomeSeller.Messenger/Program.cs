@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
-using Microsoft.OpenApi;// <-- Добавлено для настройки JWT в Swagger
+
 using StackExchange.Redis;
 
 DotNetEnv.Env.TraversePath().Load();

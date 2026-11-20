@@ -62,7 +62,7 @@ public class AuthController : ControllerBase
         }
     }
 
-    [HttpPost("ChangePassword")]
+    [HttpPut("ChangePassword")]
     [ProducesResponseType(typeof(LoginResponse), 200)]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {

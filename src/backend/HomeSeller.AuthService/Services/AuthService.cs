@@ -14,15 +14,13 @@ namespace HomeSellerServer.Services
         private readonly IUserStore _userStore;
         private readonly IPublishEndpoint _publishEndpoint;
         private readonly ILogger<AuthService> _logger;
-        private readonly IDatabase _redis;
-        private readonly TimeSpan? _cacheExpiry = TimeSpan.FromMinutes(5);
 
         private readonly IJwtTokenGenerator _tokenService;
 
         public AuthService(IHashPassword hashPassword, IUserStore userStore, IPublishEndpoint publishEndpoint,
-            IJwtTokenGenerator tokenService, IConnectionMultiplexer muxer, ILogger<AuthService> logger)
+            IJwtTokenGenerator tokenService, ILogger<AuthService> logger)
         {
-            _redis = muxer.GetDatabase();
+
             _logger = logger;
             _publishEndpoint = publishEndpoint;
             _hashPassword = hashPassword;
@@ -35,7 +33,8 @@ namespace HomeSellerServer.Services
             var exists = await _userStore.ExistsByLoginAsync(registerRequest.Login);
             if (exists)
             {
-                throw new Exception("User already exists.");
+                _logger.LogCritical("user already exists.");
+                throw new InvalidOperationException("Пользователь с таким логином уже существует.");
             }
 
             var hashpassword = await _hashPassword.HashPasswordAsync(registerRequest.Password);
@@ -44,8 +43,10 @@ namespace HomeSellerServer.Services
             {
                 Login = registerRequest.Login,
                 HashPassword = hashpassword,
-                RoleId = AppDbContext.BuyerRoleId
+      
             };
+           
+            
             await _userStore.AddAsync(user);
             await _publishEndpoint.Publish(new UserRegisteredEvent
             {
@@ -62,23 +63,20 @@ namespace HomeSellerServer.Services
 
         async Task<LoginResponse> IAuthService.LoginAsync(LoginRequest loginRequest)
         {
-            var cachekey = "user:id";
-            var cachequery = await CacheHelper.GetCacheAsync<LoginResponse>(_redis, _logger, cachekey);
-            if (cachequery != null)
-            {
-                return cachequery;
-            }
-            var user = await _userStore.GetByLoginAsync(loginRequest.Login);
+            
+            var user = await _userStore.FindByLoginAsync(loginRequest.Login);
             if (user == null)
             {
-                throw new Exception("User not found.");
+                _logger.LogWarning("Ivalid login or password.");
+                throw new UnauthorizedAccessException("Неверный логин или пароль.");
             }
-
+         
             var hashpaswword = await _hashPassword.VerifyPasswordAsync(loginRequest.Password, user.HashPassword);
 
             if (!hashpaswword)
             {
-                throw new Exception("Invalid login or password.");
+                _logger.LogWarning("Ivalid login or password.");
+                throw new UnauthorizedAccessException("Неверный логин или пароль.");
             }
 
             await _publishEndpoint.Publish(new UserLoginEvent()
@@ -86,7 +84,7 @@ namespace HomeSellerServer.Services
                 UserId = user.Id,
                 Login = loginRequest.Login,
             });
-            await CacheHelper.SetCacheAsync(_redis, _logger, user , cachekey, _cacheExpiry );
+          
             return new LoginResponse
             {
                 Login = user.Login,
@@ -97,10 +95,11 @@ namespace HomeSellerServer.Services
 
         public async Task<bool> ChangePasswordAsync(ChangePasswordRequest request)
         {
-            var user = await _userStore.GetByLoginAsync(request.Login);
+            var user = await _userStore.FindByLoginAsync(request.Login);
             if (user == null)
             {
-                throw new Exception("User not found.");
+                _logger.LogWarning("invalid login or password.");
+                return false;
             }
 
 
@@ -108,7 +107,8 @@ namespace HomeSellerServer.Services
                 await _hashPassword.VerifyPasswordAsync(request.CurrentPassword, user.HashPassword);
             if (!isCurrentPasswordValid)
             {
-                throw new Exception("Invalid current password.");
+                _logger.LogWarning("Ivalid current password.");
+                return false;
             }
 
 
@@ -144,7 +144,7 @@ namespace HomeSellerServer.Services
                 UserId = user.Id,
                 
             });
-            await CacheHelper.InvalidateCacheAsync(_redis, _logger, "user:id");
+           
             return true;
         }
     }
