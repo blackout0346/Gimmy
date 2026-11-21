@@ -64,7 +64,7 @@ public class CartStore : ICartStore
             return false;
         }
 
-        var item = await _cartDbContext.CartItem.FirstOrDefaultAsync(c => c.ProductId == productId);
+        var item =  cart.CartItems.FirstOrDefault(c => c.ProductId == productId);
         if (item != null)
         {
             cart.CartItems.Remove(item);

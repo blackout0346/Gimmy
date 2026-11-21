@@ -34,7 +34,7 @@ public class CartController : ControllerBase
         try
         {
             var userId = GetUserId();
-            var result = _cartService.AddItemAsync(userId, request);
+            var result =await _cartService.AddItemAsync(userId, request);
             return Ok(result);
         }
         catch (Exception ex)

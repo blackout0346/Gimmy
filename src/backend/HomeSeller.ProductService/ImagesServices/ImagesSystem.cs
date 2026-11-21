@@ -44,7 +44,7 @@ public class ImagesSystem
                 throw new Exception($"Недопустимый формат файла. Разрешены: {string.Join(", ", Enum.GetNames<coded>())}");
             }          
             var safefolder = InitDirectory();
-            var uniquefilename = $"{Guid.NewGuid()}{extension}";
+            var uniquefilename = $"{Guid.NewGuid()}.{extension.ToLowerInvariant()}";
             var clearpath = Path.Combine(safefolder, uniquefilename);
 
             using (var filestream = new FileStream(clearpath, FileMode.Create))

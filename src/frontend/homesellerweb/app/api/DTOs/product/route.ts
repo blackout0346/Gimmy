@@ -8,6 +8,7 @@ export interface ProductsRequest {
   imageFiles?: File[] | null;
   conditionId: string;
   userId: string;
+  Position :string;
   tagIds: string[];
 }
 
@@ -22,5 +23,6 @@ export interface ProductsResponse {
   nameCondition: string;
   userId: string;
   sellerLogin: string;
+  Position :string;
   tags: string[];
 }

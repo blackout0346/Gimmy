@@ -17,6 +17,10 @@ public class ProductDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.HasDefaultSchema("SellShop.Product");
+        modelBuilder.Entity<Condition>().HasData(
+            new Condition { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), NameCondition = "Новое" },
+            new Condition { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), NameCondition = "Б/У" }
+        );
        
 
         modelBuilder.Entity<Tags>(entity =>

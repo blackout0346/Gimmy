@@ -9,7 +9,7 @@ public class ProductsRequest
     public List<IFormFile>? ImageFiles { get; set; } 
     public Guid ConditionId { get; set; }
     public Guid UserId { get; set; }
-
+    public string Position { get; set; }
 
     public List<Guid> TagIds { get; set; } = new();
 }

@@ -29,11 +29,7 @@ public class JwtTokenGenerator : IJwtTokenGenerator
         };
 
    
-        if (user.Role != null && !string.IsNullOrWhiteSpace(user.Role.RoleName))
-        {
-            claims.Add(new Claim(ClaimTypes.Role, user.Role.RoleName));
-        }
-
+    
         var token = new JwtSecurityToken(
             issuer: _configuration["Jwt:Issuer"],
             audience: _configuration["Jwt:Audience"],
