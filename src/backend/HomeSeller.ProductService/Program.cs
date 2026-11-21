@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
+using DotNetEnv;
 using HomeSellerServer.Interface;
 using HomeSellerServer.Module;
 using MassTransit;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.Tokens;
 
 using ProductService.Consume;
@@ -15,6 +17,7 @@ using ProductService.ImagesServices;
 using ProductService.Interface;
 using ProductService.Module;
 using Microsoft.OpenApi;
+using Npgsql;
 using ProductService.StoreService;
 using StackExchange.Redis;
 
@@ -50,7 +53,7 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod();
     });
 });
-var redisHost = builder.Configuration["Redis:Host"] ?? "localhost";
+var redisHost = builder.Configuration["Redis:HostLocal"] ?? "localhost";
 var redisPort = builder.Configuration["Redis:Port"] ?? "6379";
 var redispassword = builder.Configuration["Redis:Password"];
 var configOptions = new ConfigurationOptions
@@ -75,7 +78,7 @@ builder.Services.AddMassTransit(x =>
     x.AddConsumer<UserDeleteConsumer>();
     x.UsingRabbitMq((context, cfg) =>
     {
-        var host = builder.Configuration["RabbitMQ:HostName"]?? "localhost";
+        var host = builder.Configuration["RabbitMQ:HostNameLocal"]?? "localhost";
         cfg.Host(host, hostConfigurator =>
         {
             hostConfigurator.Username(builder.Configuration["RabbitMQ:Username"] ?? "guest");
@@ -90,10 +93,11 @@ builder.Services.AddTransient<ImagesSystem>();
 builder.Services.AddTransient<IProductStore, ProductStore>();
 builder.Services.AddTransient<IProductService, ProductService.Services.ProductService>();
 
+string postgresConnect = GetActiveConnectionString(builder.Configuration);
 
 builder.Services.AddDbContext<ProductDbContext>(options =>
 {
-    options.UseNpgsql(builder.Configuration.GetConnectionString("NpgsqlConnection"));
+    options.UseNpgsql(postgresConnect);
 });
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
@@ -126,9 +130,9 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
-
-
-    await context.Database.MigrateAsync();
+   
+     // await context.Database.MigrateAsync();
+    
 
     if (!await context.Tags.AnyAsync())
     {
@@ -157,3 +161,34 @@ app.UseStaticFiles(new StaticFileOptions
 app.MapGet("/", () => "Hello World!");
 
 app.Run();
+
+static string GetActiveConnectionString(IConfiguration configuration)
+{
+    var vpsConnectionString = configuration.GetConnectionString("NpgsqlConnectionVPS");
+    var localConnectionString = configuration.GetConnectionString("NpgsqlConnectionLocal");
+
+    // if (!string.IsNullOrEmpty(vpsConnectionString))
+    // {
+    //     try
+    //     {
+    //      
+    //         using var testConnection = new NpgsqlConnection(vpsConnectionString);
+    //         testConnection.Open();
+    //         
+    //         Console.WriteLine($"[DB] Выбрана база VPS: {testConnection.Host}");
+    //         return vpsConnectionString;
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Console.WriteLine($"[DB] VPS недоступен ({ex.Message}). Переключаемся на localhost...");
+    //     }
+    // }
+
+    if (string.IsNullOrEmpty(localConnectionString))
+    {
+        throw new InvalidOperationException("Не найдена строка подключения LocalConnection в .env");
+    }
+
+    Console.WriteLine("[DB] Выбрана локальная база данных (localhost)");
+    return localConnectionString;
+}
