@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using StackExchange.Redis;
 using Microsoft.OpenApi;
+using Npgsql;
 
 DotNetEnv.Env.TraversePath().Load();
 var builder = WebApplication.CreateBuilder(args);
@@ -46,7 +47,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-var redisHost = builder.Configuration["Redis:Host"] ?? "localhost";
+var redisHost = builder.Configuration["Redis:HostLocal"] ?? "localhost";
 var redisPort = builder.Configuration["Redis:Port"] ?? "6379";
 var redispassword = builder.Configuration["Redis:Password"];
 var configOptions = new ConfigurationOptions
@@ -71,10 +72,13 @@ builder.Services.AddTransient<ICartStore, CartStore>();
 builder.Services.AddTransient<ICartService, CartService>();
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(configOptions));
+string postgresConnect = GetActiveConnectionString(builder.Configuration);
+
 builder.Services.AddDbContext<CartDbContext>(options =>
 {
-    options.UseNpgsql(builder.Configuration.GetConnectionString("NpgsqlConnection"));
+    options.UseNpgsql(postgresConnect);
 });
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
     options.TokenValidationParameters = new TokenValidationParameters
@@ -110,3 +114,33 @@ using (var scope = app.Services.CreateScope())
 app.MapGet("/", () => "Hello World!");
 
 app.Run();
+static string GetActiveConnectionString(IConfiguration configuration)
+{
+    var vpsConnectionString = configuration.GetConnectionString("NpgsqlConnectionVPS");
+    var localConnectionString = configuration.GetConnectionString("NpgsqlConnectionLocal");
+
+    if (!string.IsNullOrEmpty(vpsConnectionString))
+    {
+        try
+        {
+         
+            using var testConnection = new NpgsqlConnection(vpsConnectionString);
+            testConnection.Open();
+            
+            Console.WriteLine($"[DB] Выбрана база VPS: {testConnection.Host}");
+            return vpsConnectionString;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DB] VPS недоступен ({ex.Message}). Переключаемся на localhost...");
+        }
+    }
+
+    if (string.IsNullOrEmpty(localConnectionString))
+    {
+        throw new InvalidOperationException("Не найдена строка подключения LocalConnection в .env");
+    }
+
+    Console.WriteLine("[DB] Выбрана локальная база данных (localhost)");
+    return localConnectionString;
+}

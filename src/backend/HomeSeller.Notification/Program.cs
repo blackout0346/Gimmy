@@ -51,7 +51,7 @@ builder.Services.AddSwaggerGen(options =>
         [new OpenApiSecuritySchemeReference("Bearer", document)] = new List<string>()
     });
 });
-var redisHost = builder.Configuration["Redis:Host"] ?? "localhost";
+var redisHost = builder.Configuration["Redis:HostLocal"] ?? "localhost";
 var redisPort = builder.Configuration["Redis:Port"] ?? "6379";
 var redisPassword = builder.Configuration["Redis:Password"];
 var configOptions = new ConfigurationOptions
@@ -114,7 +114,7 @@ builder.Services.AddMassTransit(x =>
 
     x.UsingRabbitMq((context, cfg) =>
     {
-        var rabbitHost = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
+        var rabbitHost = builder.Configuration["RabbitMQ:HostNameLocal"] ?? "localhost";
         var rabbitUser = builder.Configuration["RabbitMQ:Username"] ?? "guest";
         var rabbitPass = builder.Configuration["RabbitMQ:Password"] ?? "guest";
 

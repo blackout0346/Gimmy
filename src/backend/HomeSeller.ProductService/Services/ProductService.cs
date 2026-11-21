@@ -87,6 +87,7 @@ public class ProductService : IProductService
             ConditionId = request.ConditionId,
             UserId = request.UserId,
             CreateAt = DateTime.UtcNow,
+            Position = request.Position,
             ImageURLs = request.ImageURLs?.Where(img => !string.IsNullOrWhiteSpace(img)).Select(img => new ProductImage
             {
                 Id = Guid.NewGuid(),
@@ -134,6 +135,7 @@ public class ProductService : IProductService
             Price = request.Price,
             ConditionId = request.ConditionId,
             UserId = existing.UserId,
+            Position = existing.Position,
             ImageURLs = request.ImageURLs.Where(img => !string.IsNullOrWhiteSpace(img)).Select(img => new ProductImage
             {
                 Id = Guid.NewGuid(),

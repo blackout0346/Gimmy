@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using Npgsql;
 using StackExchange.Redis;
 
 DotNetEnv.Env.TraversePath().Load();
@@ -49,7 +50,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-var redisHost = builder.Configuration["Redis:Host"] ?? "localhost";
+var redisHost = builder.Configuration["Redis:HostLocal"] ?? "localhost";
 var redisPort = builder.Configuration["Redis:Port"] ?? "6379";
 var redisPassword = builder.Configuration["Redis:Password"];
 var configOptions = new ConfigurationOptions
@@ -63,7 +64,7 @@ builder.Services.AddMassTransit(x =>
 {
     x.UsingRabbitMq((context, cfg) =>
     {
-        var host = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
+        var host = builder.Configuration["RabbitMQ:HostNameLocal"] ?? "localhost";
         cfg.Host(host, "/", h =>
         {
             h.Username(builder.Configuration["RabbitMQ:Username"] ?? "guest");
@@ -78,9 +79,11 @@ builder.Services.AddTransient<IAuthService, AuthService>();
 builder.Services.AddTransient<IUserStore, UserStore>();
 builder.Services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
 
+string postgresConnect = GetActiveConnectionString(builder.Configuration);
+
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    options.UseNpgsql(builder.Configuration.GetConnectionString("NpgsqlConnection"));
+    options.UseNpgsql(postgresConnect);
 });
 
 builder.Services.AddRateLimiter(options =>
@@ -129,9 +132,40 @@ using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-     await context.Database.MigrateAsync();
+    
+      await context.Database.MigrateAsync();
 }
 
 app.MapGet("/", () => "Hello World!");
 
 app.Run();
+static string GetActiveConnectionString(IConfiguration configuration)
+{
+    // var vpsConnectionString = configuration.GetConnectionString("NpgsqlConnectionVPS");
+    var localConnectionString = configuration.GetConnectionString("NpgsqlConnectionLocal");
+
+    // if (!string.IsNullOrEmpty(vpsConnectionString))
+    // {
+    //     try
+    //     {
+    //      
+    //         using var testConnection = new NpgsqlConnection(vpsConnectionString);
+    //         testConnection.Open();
+    //         
+    //         Console.WriteLine($"[DB] Выбрана база VPS: {testConnection.Host}");
+    //         return vpsConnectionString;
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Console.WriteLine($"[DB] VPS недоступен ({ex.Message}). Переключаемся на localhost...");
+    //     }
+    // }
+
+    if (string.IsNullOrEmpty(localConnectionString))
+    {
+        throw new InvalidOperationException("Не найдена строка подключения LocalConnection в .env");
+    }
+
+    Console.WriteLine("[DB] Выбрана локальная база данных (localhost)");
+    return localConnectionString;
+}
