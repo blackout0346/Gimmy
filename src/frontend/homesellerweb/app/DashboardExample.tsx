@@ -15,7 +15,6 @@ import { tokenStorage } from '@/lib/http';
 const MESSENGER_API_URL =
   process.env.NEXT_PUBLIC_MESSENGER_API_URL || 'http://localhost:5214';
 
-// Вспомогательная функция для получения userId текущего пользователя из JWT
 function getCurrentUserIdFromToken(): string | null {
   const token = tokenStorage.get();
   if (!token) return null;
@@ -35,12 +34,26 @@ function getCurrentUserIdFromToken(): string | null {
 }
 
 export function DashboardExample() {
+  // Данные магазина и пользователя
   const [products, setProducts] = useState<ProductsResponse[]>([]);
+  const [selectedProduct, setSelectedProduct] =
+    useState<ProductsResponse | null>(null);
   const [cart, setCart] = useState<CartResponse | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Форма авторизации
   const [loginInput, setLoginInput] = useState('user1');
   const [passwordInput, setPasswordInput] = useState('password123');
 
+  // Форма добавления товара
+  const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductPrice, setNewProductPrice] = useState('');
+  const [newProductDescription, setNewProductDescription] = useState('');
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+
+  // Провайдеры
   const { notifications, isConnected } = useNotifications();
   const {
     connectionState,
@@ -49,6 +62,7 @@ export function DashboardExample() {
     messages,
     typingUsers,
     isLoadingHistory,
+    connect,
     setActiveChat,
     loadChats,
     loadMoreMessages,
@@ -72,38 +86,89 @@ export function DashboardExample() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const showError = (err: unknown, fallback: string) => {
+    const message = err instanceof Error ? err.message : fallback;
+    setErrorMsg(message);
+    console.error(fallback, err);
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const data = await productService.getProducts();
+      setProducts(data);
+    } catch (error) {
+      showError(error, 'Ошибка при загрузке товаров');
+    }
+  };
+
   useEffect(() => {
     setCurrentUserId(getCurrentUserIdFromToken());
-    productService.getProducts().then(setProducts).catch(console.error);
+    fetchProducts();
   }, []);
 
   const currentMessages = activeChatId ? messages[activeChatId] || [] : [];
   const currentTyping = activeChatId ? typingUsers[activeChatId] || [] : [];
   const activeChat = chats.find((c) => c.id === activeChatId) || null;
 
-  // Автоскролл вниз при новых сообщениях
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages.length, activeChatId]);
 
+  // --- Авторизация ---
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
     try {
       await authService.login({ login: loginInput, password: passwordInput });
       setCurrentUserId(getCurrentUserIdFromToken());
       const userCart = await cartService.getCart();
       setCart(userCart);
-      await loadChats();
+      await connect();
     } catch (error) {
-      console.error('Ошибка входа:', error);
+      showError(error, 'Ошибка входа');
+    }
+  };
+
+  // --- Товары и Корзина ---
+
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProductName.trim() || !newProductPrice) return;
+
+    setErrorMsg(null);
+    setIsCreatingProduct(true);
+    try {
+      await (productService as any).createProduct({
+        nameProduct: newProductName.trim(),
+        price: Number(newProductPrice),
+        description: newProductDescription.trim(),
+      });
+
+      setNewProductName('');
+      setNewProductPrice('');
+      setNewProductDescription('');
+      setIsAddProductOpen(false);
+      await fetchProducts();
+    } catch (error) {
+      showError(error, 'Ошибка при добавлении товара');
+    } finally {
+      setIsCreatingProduct(false);
     }
   };
 
   const handleAddToCart = async (productId: string) => {
-    await cartService.addToCart({ productId, quantity: 1 });
-    const updatedCart = await cartService.getCart();
-    setCart(updatedCart);
+    setErrorMsg(null);
+    try {
+      await cartService.addToCart({ productId, quantity: 1 });
+      const updatedCart = await cartService.getCart();
+      setCart(updatedCart);
+    } catch (error) {
+      showError(error, 'Ошибка при добавлении в корзину');
+    }
   };
+
+  // --- Мессенджер ---
 
   const handleSelectChat = async (chatId: string) => {
     setPage(1);
@@ -123,6 +188,7 @@ export function DashboardExample() {
   };
 
   const handleStartChatWithSeller = async (product: ProductsResponse) => {
+    setErrorMsg(null);
     try {
       const targetUserId =
         (product as any).userId || '00000000-0000-0000-0000-000000000000';
@@ -134,9 +200,10 @@ export function DashboardExample() {
         initiatorName: loginInput,
       });
 
+      setSelectedProduct(null);
       await handleSelectChat(chat.id);
     } catch (error) {
-      console.error('Не удалось создать/открыть чат:', error);
+      showError(error, 'Не удалось создать/открыть чат');
     }
   };
 
@@ -157,6 +224,7 @@ export function DashboardExample() {
       return;
     }
 
+    setErrorMsg(null);
     try {
       if (editingMessageId) {
         await editMessage({
@@ -190,7 +258,7 @@ export function DashboardExample() {
       if (fileInputRef.current) fileInputRef.current.value = '';
       sendTypingStatus(activeChatId, false);
     } catch (error) {
-      console.error('Ошибка при отправке/редактировании:', error);
+      showError(error, 'Ошибка при отправке/редактировании');
     } finally {
       setIsUploading(false);
     }
@@ -206,8 +274,8 @@ export function DashboardExample() {
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
       {/* Верхняя панель статуса и авторизации */}
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-white p-4 shadow-sm border border-slate-200">
-        <div className="flex items-center gap-4">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-bold text-slate-900">
             HomeSeller Test Panel
           </h1>
@@ -231,6 +299,11 @@ export function DashboardExample() {
             <span className="h-2 w-2 rounded-full bg-current" />
             Messenger: {connectionState}
           </span>
+          {currentUserId && (
+            <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
+              UID: {currentUserId.slice(0, 8)}
+            </span>
+          )}
         </div>
 
         <form onSubmit={handleLogin} className="flex items-center gap-2">
@@ -239,64 +312,153 @@ export function DashboardExample() {
             value={loginInput}
             onChange={(e) => setLoginInput(e.target.value)}
             placeholder="Логин"
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            className="w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
           />
           <input
             type="password"
             value={passwordInput}
             onChange={(e) => setPasswordInput(e.target.value)}
             placeholder="Пароль"
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            className="w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
           />
           <button
             type="submit"
-            className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition"
+            className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
           >
             Войти
           </button>
         </form>
       </header>
 
-      {/* Основная сетка: Магазин слева / Мессенджер справа */}
+      {/* Баннер ошибок API / валидации */}
+      {errorMsg && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <span>{errorMsg}</span>
+          <button
+            type="button"
+            onClick={() => setErrorMsg(null)}
+            className="ml-4 font-bold hover:text-rose-900"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Основная сетка */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Левая колонка: Товары, Корзина, Уведомления (5 колонок) */}
+        {/* Левая колонка: Каталог, Добавление товара, Корзина, Уведомления */}
         <div className="space-y-6 lg:col-span-5">
-          {/* Товары */}
-          <section className="rounded-xl bg-white p-5 shadow-sm border border-slate-200">
+          {/* Каталог и форма добавления */}
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Каталог товаров</h2>
-              <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                В корзине: {cart?.cartItems.length ?? 0}
-              </span>
+              <h2 className="text-lg font-semibold">
+                Каталог ({products.length})
+              </h2>
+              <div className="flex items-center gap-2">
+                <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                  Корзина: {cart?.cartItems.length ?? 0}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsAddProductOpen((prev) => !prev)}
+                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-700"
+                >
+                  {isAddProductOpen ? 'Закрыть' : '+ Добавить товар'}
+                </button>
+              </div>
             </div>
 
+            {/* Форма добавления нового товара */}
+            {isAddProductOpen && (
+              <form
+                onSubmit={handleCreateProduct}
+                className="mb-5 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/50 p-4"
+              >
+                <h3 className="text-sm font-semibold text-emerald-900">
+                  Новый товар
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={newProductName}
+                    onChange={(e) => setNewProductName(e.target.value)}
+                    placeholder="Название товара"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={newProductPrice}
+                    onChange={(e) => setNewProductPrice(e.target.value)}
+                    placeholder="Цена (₽)"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <textarea
+                  rows={2}
+                  value={newProductDescription}
+                  onChange={(e) => setNewProductDescription(e.target.value)}
+                  placeholder="Описание товара (опционально)"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isCreatingProduct}
+                    className="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {isCreatingProduct ? 'Сохранение...' : 'Создать товар'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Список товаров */}
             {products.length === 0 ? (
-              <p className="text-sm text-slate-400">Товары не загружены</p>
+              <p className="text-sm text-slate-400">Товары не найдены</p>
             ) : (
-              <ul className="divide-y divide-slate-100">
+              <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto pr-1">
                 {products.map((p) => (
                   <li
                     key={p.id}
-                    className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+                    className="flex items-center justify-between gap-2 py-3 first:pt-0 last:pb-0"
                   >
-                    <div>
-                      <p className="font-medium text-slate-900">
-                        {p.nameProduct}
-                      </p>
-                      <p className="text-sm text-slate-500">{p.price} ₽</p>
-                    </div>
-                    <div className="flex gap-2">
+                    <div className="min-w-0 flex-1">
                       <button
+                        type="button"
+                        onClick={() => setSelectedProduct(p)}
+                        className="truncate text-left font-medium text-slate-900 hover:text-blue-600 hover:underline"
+                      >
+                        {p.nameProduct}
+                      </button>
+                      <p className="text-sm font-semibold text-slate-600">
+                        {p.price} ₽
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProduct(p)}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                      >
+                        Просмотр
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleAddToCart(p.id)}
-                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium hover:bg-slate-50 transition"
+                        className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium transition hover:bg-slate-50"
                       >
                         В корзину
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleStartChatWithSeller(p)}
-                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 transition"
+                        className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-700"
                       >
-                        Написать продавцу
+                        Чат
                       </button>
                     </div>
                   </li>
@@ -306,18 +468,18 @@ export function DashboardExample() {
           </section>
 
           {/* Уведомления */}
-          <section className="rounded-xl bg-white p-5 shadow-sm border border-slate-200">
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="mb-3 text-lg font-semibold">
               Уведомления ({notifications.length})
             </h2>
             {notifications.length === 0 ? (
               <p className="text-sm text-slate-400">Новых уведомлений нет</p>
             ) : (
-              <ul className="max-h-48 space-y-2 overflow-y-auto">
+              <ul className="max-h-44 space-y-2 overflow-y-auto">
                 {notifications.map((n, idx) => (
                   <li
                     key={`${n.entityId}-${idx}`}
-                    className="rounded-lg bg-slate-50 p-3 text-sm border border-slate-100"
+                    className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm"
                   >
                     <p className="font-semibold text-slate-800">{n.title}</p>
                     <p className="text-slate-600">{n.message}</p>
@@ -328,8 +490,8 @@ export function DashboardExample() {
           </section>
         </div>
 
-        {/* Правая колонка: Полноценный интерфейс Мессенджера (7 колонок) */}
-        <section className="flex h-[680px] overflow-hidden rounded-xl bg-white shadow-sm border border-slate-200 lg:col-span-7">
+        {/* Правая колонка: Интерфейс Мессенджера */}
+        <section className="flex h-[680px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:col-span-7">
           {/* Сайдбар со списком чатов */}
           <aside className="flex w-1/3 flex-col border-r border-slate-200 bg-slate-50">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
@@ -359,7 +521,7 @@ export function DashboardExample() {
                       onClick={() => handleSelectChat(chat.id)}
                       className={`w-full border-b border-slate-100 p-3.5 text-left transition ${
                         isActive
-                          ? 'bg-blue-50 border-l-4 border-l-blue-600'
+                          ? 'border-l-4 border-l-blue-600 bg-blue-50'
                           : 'hover:bg-slate-100'
                       }`}
                     >
@@ -385,7 +547,6 @@ export function DashboardExample() {
           <div className="flex w-2/3 flex-col bg-white">
             {activeChat ? (
               <>
-                {/* Шапка диалога */}
                 <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
                   <div>
                     <h3 className="text-sm font-bold text-slate-900">
@@ -406,7 +567,7 @@ export function DashboardExample() {
                   )}
                 </div>
 
-                {/* Область сообщений */}
+                {/* Сообщения */}
                 <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50/50 p-4">
                   {isLoadingHistory && currentMessages.length === 0 ? (
                     <div className="flex h-full items-center justify-center text-sm text-slate-400">
@@ -432,13 +593,12 @@ export function DashboardExample() {
                           }`}
                         >
                           <div
-                            className={`group relative max-w-[80%] rounded-2xl px-4 py-2.5 text-sm shadow-xs ${
+                            className={`relative max-w-[80%] rounded-2xl px-4 py-2.5 text-sm shadow-xs ${
                               isMine
-                                ? 'bg-blue-600 text-white rounded-br-none'
-                                : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'
+                                ? 'rounded-br-none bg-blue-600 text-white'
+                                : 'rounded-bl-none border border-slate-200 bg-white text-slate-800'
                             }`}
                           >
-                            {/* Цитируемое сообщение (Reply) */}
                             {msg.reply && (
                               <div
                                 className={`mb-1.5 rounded border-l-2 px-2 py-1 text-xs ${
@@ -454,14 +614,12 @@ export function DashboardExample() {
                               </div>
                             )}
 
-                            {/* Текст сообщения */}
                             {msg.text && (
                               <p className="whitespace-pre-wrap break-words">
                                 {msg.text}
                               </p>
                             )}
 
-                            {/* Вложения */}
                             {msg.attachments?.length > 0 && (
                               <div className="mt-2 space-y-1.5">
                                 {msg.attachments.map((att) => {
@@ -505,7 +663,6 @@ export function DashboardExample() {
                               </div>
                             )}
 
-                            {/* Время и пометка ред. */}
                             <div
                               className={`mt-1 flex items-center justify-end gap-1.5 text-[10px] ${
                                 isMine ? 'text-blue-200' : 'text-slate-400'
@@ -521,7 +678,6 @@ export function DashboardExample() {
                             </div>
                           </div>
 
-                          {/* Кнопки действий под сообщением */}
                           <div className="mt-1 flex gap-2 px-1 text-[11px] text-slate-400">
                             <button
                               type="button"
@@ -565,12 +721,12 @@ export function DashboardExample() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Индикатор "печатает..." */}
+                {/* Индикатор печати */}
                 <div className="h-5 px-4 text-xs italic text-slate-400">
                   {currentTyping.length > 0 && 'Собеседник печатает...'}
                 </div>
 
-                {/* Плашка ответа или редактирования */}
+                {/* Плашка ответа / редактирования */}
                 {(replyMessageObj || editingMessageId) && (
                   <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs">
                     <div className="truncate">
@@ -603,7 +759,7 @@ export function DashboardExample() {
                   </div>
                 )}
 
-                {/* Предпросмотр выбранных файлов */}
+                {/* Предпросмотр файлов */}
                 {selectedFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2">
                     {selectedFiles.map((file, i) => (
@@ -628,7 +784,7 @@ export function DashboardExample() {
                   </div>
                 )}
 
-                {/* Панель ввода сообщения */}
+                {/* Форма отправки */}
                 <form
                   onSubmit={handleSendOrEditMessage}
                   className="flex items-center gap-2 border-t border-slate-200 p-3"
@@ -648,7 +804,7 @@ export function DashboardExample() {
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         title="Прикрепить файл"
-                        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 transition"
+                        className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100"
                       >
                         📎
                       </button>
@@ -670,7 +826,7 @@ export function DashboardExample() {
                       isUploading ||
                       (!messageText.trim() && selectedFiles.length === 0)
                     }
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition"
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
                   >
                     {isUploading
                       ? 'Загрузка...'
@@ -684,14 +840,73 @@ export function DashboardExample() {
               <div className="flex h-full flex-col items-center justify-center p-6 text-center text-slate-400">
                 <p className="text-sm font-medium">Чат не выбран</p>
                 <p className="mt-1 text-xs">
-                  Выберите диалог слева или нажмите «Написать продавцу» у любого
-                  товара
+                  Выберите диалог слева или нажмите «Чат» у любого товара
                 </p>
               </div>
             )}
           </div>
         </section>
       </div>
+
+      {/* Модальное окно просмотра товара */}
+      {selectedProduct && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setSelectedProduct(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  {selectedProduct.nameProduct}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  ID: {selectedProduct.id}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedProduct(null)}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-4 text-2xl font-bold text-blue-600">
+              {selectedProduct.price} ₽
+            </div>
+
+            <div className="mb-6 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+              {(selectedProduct as any).description ||
+                'Описание товара отсутствует.'}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  handleAddToCart(selectedProduct.id);
+                  setSelectedProduct(null);
+                }}
+                className="flex-1 rounded-lg border border-slate-300 py-2 text-sm font-medium transition hover:bg-slate-50"
+              >
+                В корзину
+              </button>
+              <button
+                type="button"
+                onClick={() => handleStartChatWithSeller(selectedProduct)}
+                className="flex-1 rounded-lg bg-indigo-600 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+              >
+                Написать продавцу
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
