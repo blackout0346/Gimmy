@@ -59,7 +59,10 @@ builder.Services.AddTransient<ImagesSystem>();
 builder.Services.AddScoped<IMessangerStore, MessangerStore>();
 builder.Services.AddScoped<IMessangerService, MessangerService>();
 
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true;
+});
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendCorsPolicy", policy =>
@@ -148,6 +151,28 @@ if (app.Environment.IsDevelopment())
 // ----------------------------
 
 app.UseCors("FrontendCorsPolicy");
+var attachmentPath = Path.Combine(builder.Environment.ContentRootPath, "AttachmentMessage");
+Directory.CreateDirectory(attachmentPath);
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(attachmentPath),
+    RequestPath = "/AttachmentMessage",
+    ServeUnknownFileTypes = true,
+    DefaultContentType = "application/octet-stream",
+    OnPrepareResponse = ctx =>
+    {
+        var contentType = ctx.Context.Response.ContentType ?? "";
+        if (!contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Context.Response.Headers.Append(
+                "Content-Disposition",
+                $"attachment; filename=\"{ctx.File.Name}\""
+            );
+        }
+    }
+});
+
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -160,14 +185,6 @@ using (var scope = app.Services.CreateScope())
     await context.Database.MigrateAsync();
 }
 
-var imageStorePath = Path.Combine(builder.Environment.ContentRootPath, "imageStore");
-Directory.CreateDirectory(imageStorePath);
-
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(imageStorePath),
-    RequestPath = "/AttachmentMessage"
-});
 
 app.MapGet("/", () => "Hello World!");
 

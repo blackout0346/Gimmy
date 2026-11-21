@@ -2,11 +2,12 @@
 using System.Security.Claims;
 using HomeSeller.Messenger.DTO.Messanger;
 using HomeSeller.Messenger.Interface;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace HomeSeller.Messenger.Controller;
 
-
+[Authorize]
 public class MessengerHub : Hub<IMessengerClient>
 {
     private readonly IMessangerService _messangerService;

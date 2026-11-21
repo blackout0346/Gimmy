@@ -68,7 +68,7 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({
 }) => {
   const connectionRef = useRef<signalR.HubConnection | null>(null);
   const startPromiseRef = useRef<Promise<void> | null>(null);
-
+const connectedTokenRef = useRef<string | null>(null);
   const [connectionState, setConnectionState] =
     useState<signalR.HubConnectionState>(
       signalR.HubConnectionState.Disconnected
@@ -91,37 +91,46 @@ export const MessengerProvider: React.FC<MessengerProviderProps> = ({
     }
   }, []);
 
-  const stopConnectionSafely = useCallback(async () => {
-    const conn = connectionRef.current;
-    const pendingStart = startPromiseRef.current;
+const stopConnectionSafely = useCallback(async () => {
+  const conn = connectionRef.current;
+  const pendingStart = startPromiseRef.current;
 
-    connectionRef.current = null;
-    startPromiseRef.current = null;
+  connectionRef.current = null;
+  startPromiseRef.current = null;
+  connectedTokenRef.current = null; // <-- добавить
 
-    if (pendingStart) {
-      await pendingStart.catch(() => {});
-    }
+  if (pendingStart) {
+    await pendingStart.catch(() => {});
+  }
 
-    if (conn && conn.state !== signalR.HubConnectionState.Disconnected) {
-      await conn.stop().catch(() => {});
-    }
-  }, []);
+  if (conn && conn.state !== signalR.HubConnectionState.Disconnected) {
+    await conn.stop().catch(() => {});
+  }
+}, []);
 
-  const connect = useCallback(async () => {
-    const token = tokenStorage.get();
-    if (!token) return;
+const connect = useCallback(async () => {
+  const token = tokenStorage.get();
+  if (!token) return;
 
-    if (
-      connectionRef.current?.state === signalR.HubConnectionState.Connected ||
-      connectionRef.current?.state === signalR.HubConnectionState.Connecting
-    ) {
-      return;
-    }
+  // Пропускаем, только если уже подключены С ТЕМ ЖЕ токеном
+  if (
+    connectedTokenRef.current === token &&
+    (connectionRef.current?.state === signalR.HubConnectionState.Connected ||
+      connectionRef.current?.state === signalR.HubConnectionState.Connecting)
+  ) {
+    return;
+  }
 
-    await stopConnectionSafely();
+  // Если токен поменялся — закрываем старое соединение и чистим старые чаты
+  await stopConnectionSafely();
+  setChats([]);
+  setMessages({});
+  setActiveChatId(null);
+  setTypingUsers({});
 
-    const hubUrl = `${MESSENGER_API_URL}${hubPath}`;
+  connectedTokenRef.current = token;
 
+  const hubUrl = `${MESSENGER_API_URL}${hubPath}`;
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(hubUrl, {
         accessTokenFactory: () => tokenStorage.get() || '',

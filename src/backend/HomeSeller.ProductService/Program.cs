@@ -130,7 +130,9 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
-   
+
+    // await context.Database.EnsureDeletedAsync();
+    // await context.Database.EnsureCreatedAsync();
      // await context.Database.MigrateAsync();
     
 

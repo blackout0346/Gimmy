@@ -15,6 +15,50 @@ import { tokenStorage } from '@/lib/http';
 const MESSENGER_API_URL =
   process.env.NEXT_PUBLIC_MESSENGER_API_URL || 'http://localhost:5214';
 
+const CONDITION_NEW = '11111111-1111-1111-1111-111111111111';
+const CONDITION_USED = '22222222-2222-2222-2222-222222222222';
+
+const MOCK_PRODUCTS = [
+  {
+    nameProduct: 'iPhone 15 Pro 256GB',
+    price: 98500,
+    description: 'Идеальное состояние, полный комплект, АКБ 96%.',
+    Position: 'Москва',
+    conditionId: CONDITION_USED,
+    imageURLs: ['https://picsum.photos/seed/iphone15/400/300'],
+    tagIds: [] as string[],
+  },
+  {
+    nameProduct: 'Механическая клавиатура Keychron K2',
+    price: 8900,
+    description: 'Свитчи Gateron Brown, горячая замена, RGB-подсветка.',
+    Position: 'Санкт-Петербург',
+    conditionId: CONDITION_NEW,
+    imageURLs: ['https://picsum.photos/seed/keychron/400/300'],
+    tagIds: [] as string[],
+  },
+  {
+    nameProduct: 'Наушники Sony WH-1000XM5',
+    price: 27400,
+    description: 'Отличное шумоподавление, кейс и кабель в комплекте.',
+    Position: 'Казань',
+    conditionId: CONDITION_NEW,
+    imageURLs: ['https://picsum.photos/seed/sonyxm5/400/300'],
+    tagIds: [] as string[],
+  },
+  {
+    nameProduct: 'Монитор LG UltraGear 27" 144Hz',
+    price: 24900,
+    description: 'IPS матрица, 2K разрешение, без битых пикселей.',
+    Position: 'Екатеринбург',
+    conditionId: CONDITION_USED,
+    imageURLs: ['https://picsum.photos/seed/lgmonitor/400/300'],
+    tagIds: [] as string[],
+  },
+];
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 function getCurrentUserIdFromToken(): string | null {
   const token = tokenStorage.get();
   if (!token) return null;
@@ -41,6 +85,10 @@ export function DashboardExample() {
   const [cart, setCart] = useState<CartResponse | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Симуляция
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simLogs, setSimLogs] = useState<string[]>([]);
 
   // Форма авторизации
   const [loginInput, setLoginInput] = useState('user1');
@@ -86,6 +134,15 @@ export function DashboardExample() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const addSimLog = (text: string) => {
+    const time = new Date().toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    setSimLogs((prev) => [...prev, `[${time}] ${text}`]);
+  };
+
   const showError = (err: unknown, fallback: string) => {
     const message = err instanceof Error ? err.message : fallback;
     setErrorMsg(message);
@@ -130,6 +187,264 @@ export function DashboardExample() {
     }
   };
 
+  // --- Симуляция ---
+
+ const handleRunSimulation = async () => {
+    setIsSimulating(true);
+    setErrorMsg(null);
+    setSimLogs([]);
+
+    try {
+      // 1. Авторизация (если пользователя нет — пробуем зарегистрировать)
+      addSimLog(`Авторизация под "${loginInput}"...`);
+      try {
+        await authService.login({ login: loginInput, password: passwordInput });
+      } catch {
+        if (typeof (authService as any).register === 'function') {
+          addSimLog('Пользователь не найден, регистрируем нового...');
+          await (authService as any).register({
+            login: loginInput,
+            password: passwordInput,
+            email: `${loginInput}@test.local`,
+          });
+          await authService.login({
+            login: loginInput,
+            password: passwordInput,
+          });
+        } else {
+          throw new Error(
+            'Неверный логин/пароль (метод register не найден в authService)'
+          );
+        }
+      }
+
+      const uid =
+        getCurrentUserIdFromToken() || '00000000-0000-0000-0000-000000000000';
+      setCurrentUserId(uid);
+      await connect();
+      addSimLog('Успешный вход и подключение к SignalR.');
+      await sleep(400);
+
+      // Получаем состояния из БД (если метод есть в productService)
+      let dbConditions: { id: string; nameCondition: string }[] = [];
+      if (typeof (productService as any).getConditions === 'function') {
+        try {
+          dbConditions = await (productService as any).getConditions();
+          addSimLog(`Загружено состояний из БД: ${dbConditions.length}`);
+        } catch {
+          addSimLog('Не удалось загрузить состояния из БД, используем ID по умолчанию.');
+        }
+      }
+
+      // 2. Пошаговое добавление товаров
+      for (let i = 0; i < MOCK_PRODUCTS.length; i++) {
+        const item = MOCK_PRODUCTS[i];
+        const conditionId =
+          dbConditions.length > 0
+            ? dbConditions[i % dbConditions.length].id
+            : item.conditionId;
+
+        addSimLog(`Добавление товара: ${item.nameProduct}...`);
+        await (productService as any).createProduct({
+          ...item,
+          conditionId,
+          userId: uid,
+        });
+        await sleep(350);
+      }
+
+      const updatedProducts = await productService.getProducts();
+      setProducts(updatedProducts);
+      addSimLog(`Каталог обновлён (всего товаров: ${updatedProducts.length}).`);
+      await sleep(400);
+
+      // 3. Наполнение корзины (берём первые 2 товара)
+      const itemsForCart = updatedProducts.slice(0, 2);
+      for (const prod of itemsForCart) {
+        addSimLog(`В корзину: ${prod.nameProduct}`);
+        await cartService.addToCart({ productId: prod.id, quantity: 1 });
+        await sleep(300);
+      }
+      const updatedCart = await cartService.getCart();
+      setCart(updatedCart);
+      addSimLog(`Корзина обновлена (позиций: ${updatedCart.cartItems.length}).`);
+      await sleep(400);
+
+      // 4. Симуляция диалога в мессенджере
+      const firstProduct = updatedProducts[0];
+      if (firstProduct) {
+        addSimLog(`Открываем чат по товару "${firstProduct.nameProduct}"...`);
+        const targetUserId = firstProduct.userId || uid;
+
+        const chat = await startOrGetChat({
+          productId: firstProduct.id,
+          productName: firstProduct.nameProduct,
+          targetUserId,
+          initiatorName: loginInput,
+        });
+
+        await handleSelectChat(chat.id);
+        await sleep(500);
+
+        // Первое сообщение с индикатором печати
+        addSimLog('Симуляция печати и отправка сообщения #1...');
+        sendTypingStatus(chat.id, true);
+        await sleep(900);
+        await sendMessage({
+          chatId: chat.id,
+          senderName: loginInput,
+          text: `Здравствуйте! Подскажите, "${firstProduct.nameProduct}" ещё в наличии?`,
+          replyId: null,
+        });
+        sendTypingStatus(chat.id, false);
+        await sleep(700);
+
+        // Второе сообщение с тестовым файлом
+        addSimLog('Загрузка вложения и отправка сообщения #2...');
+        const mockFile = new File(
+          [`Заявка на осмотр: ${firstProduct.nameProduct}`],
+          'details.txt',
+          { type: 'text/plain' }
+        );
+        const uploaded = await messengerService.uploadAttachments([mockFile]);
+        await sendMessage({
+          chatId: chat.id,
+          senderName: loginInput,
+          text: 'Прикрепил файл с вопросами по доставке.',
+          replyId: null,
+          attachments: uploaded,
+        });
+      }
+
+      addSimLog('✅ Симуляция успешно завершена!');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Ошибка симуляции';
+      addSimLog(`❌ Ошибка: ${msg}`);
+      showError(error, 'Симуляция прервана');
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+  const handleSimulateIncoming = async () => {
+    setIsSimulating(true);
+    setErrorMsg(null);
+    setSimLogs([]);
+
+    let botConnection: signalR.HubConnection | null = null;
+    const myToken = tokenStorage.get();
+
+    try {
+      if (!myToken) {
+        throw new Error('Сначала войдите в свой аккаунт.');
+      }
+
+      const myUserId = getCurrentUserIdFromToken();
+      if (!myUserId) {
+        throw new Error('Не удалось прочитать ваш UserId из токена.');
+      }
+
+      if (!isSignalRConnected) {
+        await connect();
+      }
+
+      // 1. Получаем токен второго пользователя (бота), не ломая текущую сессию
+      const botLogin = 'bot_buyer';
+      const botPassword = 'password123';
+      addSimLog(`Авторизация собеседника "${botLogin}"...`);
+
+      try {
+        await authService.login({ login: botLogin, password: botPassword });
+      } catch {
+        if (typeof (authService as any).register === 'function') {
+          addSimLog(`Регистрируем "${botLogin}"...`);
+          await (authService as any).register({
+            login: botLogin,
+            password: botPassword,
+            email: `${botLogin}@test.local`,
+          });
+          await authService.login({ login: botLogin, password: botPassword });
+        } else {
+          throw new Error(
+            `Пользователь "${botLogin}" не найден, а метод register отсутствует.`
+          );
+        }
+      }
+
+      const botToken = tokenStorage.get();
+      const botUserId = getCurrentUserIdFromToken();
+
+      // Сразу возвращаем ваш основной токен обратно
+      (tokenStorage as any).set(myToken);
+
+      if (!botToken || !botUserId) {
+        throw new Error('Не удалось получить токен собеседника.');
+      }
+
+      // 2. Открываем/создаём чат между вами и ботом
+      const targetProduct = products[0];
+      const productId =
+        targetProduct?.id || '00000000-0000-0000-0000-000000000001';
+      const productName = targetProduct?.nameProduct || 'Тестовый товар';
+
+      addSimLog(`Открываем чат с "${botLogin}"...`);
+      const chat = await startOrGetChat({
+        productId,
+        productName,
+        targetUserId: botUserId,
+        initiatorName: loginInput,
+      });
+      await handleSelectChat(chat.id);
+
+      // 3. Подключаем бота к SignalR Hub отдельно от вашего соединения
+      addSimLog('Собеседник подключается к SignalR...');
+      botConnection = new signalR.HubConnectionBuilder()
+        .withUrl(`${MESSENGER_API_URL}/hubs/messenger`, {
+          accessTokenFactory: () => botToken,
+        })
+        .configureLogging(signalR.LogLevel.Warning)
+        .build();
+
+      await botConnection.start();
+      await botConnection.invoke('JoinChat', chat.id);
+
+      // 4. Сценарий входящих сообщений
+      const incomingMessages = [
+        `Привет! Увидел объявление "${productName}", ещё актуально?`,
+        'Состояние действительно хорошее? Можно сегодня вечером подъехать посмотреть?',
+        'Если всё ок, заберу сразу наличными или переводом 👍',
+      ];
+
+      for (const text of incomingMessages) {
+        addSimLog(`"${botLogin}" печатает...`);
+        await botConnection.invoke('SendTypingStatus', chat.id, true);
+        await sleep(1400);
+
+        await botConnection.invoke('SendMessage', {
+          chatId: chat.id,
+          senderName: botLogin,
+          text,
+          replyId: null,
+        });
+        await botConnection.invoke('SendTypingStatus', chat.id, false);
+        addSimLog(`Входящее сообщение получено.`);
+        await sleep(900);
+      }
+
+      addSimLog('✅ Симуляция входящих сообщений завершена!');
+    } catch (error) {
+      // На всякий случай восстанавливаем основной токен при ошибке
+      if (myToken) (tokenStorage as any).set(myToken);
+      const msg = error instanceof Error ? error.message : 'Ошибка симуляции';
+      addSimLog(`❌ Ошибка: ${msg}`);
+      showError(error, 'Не удалось симулировать входящие сообщения');
+    } finally {
+      if (botConnection) {
+        await botConnection.stop().catch(() => {});
+      }
+      setIsSimulating(false);
+    }
+  };
+
   // --- Товары и Корзина ---
 
   const handleCreateProduct = async (e: React.FormEvent) => {
@@ -139,10 +454,20 @@ export function DashboardExample() {
     setErrorMsg(null);
     setIsCreatingProduct(true);
     try {
+      const uid =
+        currentUserId ||
+        getCurrentUserIdFromToken() ||
+        '00000000-0000-0000-0000-000000000000';
+
       await (productService as any).createProduct({
         nameProduct: newProductName.trim(),
         price: Number(newProductPrice),
         description: newProductDescription.trim(),
+        Position: 'Москва',
+        conditionId: CONDITION_NEW,
+        userId: uid,
+        imageURLs: ['https://picsum.photos/seed/newproduct/400/300'],
+        tagIds: [],
       });
 
       setNewProductName('');
@@ -306,29 +631,69 @@ export function DashboardExample() {
           )}
         </div>
 
-        <form onSubmit={handleLogin} className="flex items-center gap-2">
-          <input
-            type="text"
-            value={loginInput}
-            onChange={(e) => setLoginInput(e.target.value)}
-            placeholder="Логин"
-            className="w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-          />
-          <input
-            type="password"
-            value={passwordInput}
-            onChange={(e) => setPasswordInput(e.target.value)}
-            placeholder="Пароль"
-            className="w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <form onSubmit={handleLogin} className="flex items-center gap-2">
+            <input
+              type="text"
+              value={loginInput}
+              onChange={(e) => setLoginInput(e.target.value)}
+              placeholder="Логин"
+              className="w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            />
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              placeholder="Пароль"
+              className="w-32 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
+            >
+              Войти
+            </button>
+          </form>
+
           <button
-            type="submit"
-            className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
+            type="button"
+            onClick={handleRunSimulation}
+            disabled={isSimulating}
+            className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-violet-700 disabled:opacity-50"
           >
-            Войти
+            {isSimulating ? 'Симуляция...' : '▶ Запустить симуляцию'}
           </button>
-        </form>
+        </div>
       </header>
+      <button
+  type="button"
+  onClick={handleSimulateIncoming}
+  disabled={isSimulating}
+  className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-teal-700 disabled:opacity-50"
+>
+  {isSimulating ? 'Пишет...' : '💬 Мне пишут'}
+</button>
+
+      {/* Лог симуляции */}
+      {simLogs.length > 0 && (
+        <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50/70 p-3 text-xs text-violet-950">
+          <div className="mb-1.5 flex items-center justify-between font-semibold">
+            <span>Лог симуляции</span>
+            <button
+              type="button"
+              onClick={() => setSimLogs([])}
+              className="text-violet-500 hover:text-violet-800"
+            >
+              Очистить
+            </button>
+          </div>
+          <div className="max-h-32 space-y-0.5 overflow-y-auto font-mono">
+            {simLogs.map((line, i) => (
+              <div key={i}>{line}</div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Баннер ошибок API / валидации */}
       {errorMsg && (
