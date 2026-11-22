@@ -85,8 +85,9 @@ public class ProductService : IProductService
             Description = request.Description,
             Price = request.Price,
             ConditionId = request.ConditionId,
-            UserId = request.UserId,
+            UserId = userId,
             CreateAt = DateTime.UtcNow,
+            Position = request.Position,
             ImageURLs = request.ImageURLs?.Where(img => !string.IsNullOrWhiteSpace(img)).Select(img => new ProductImage
             {
                 Id = Guid.NewGuid(),
@@ -110,7 +111,7 @@ public class ProductService : IProductService
         {
             ProductId = newProductId,
             productName = request.NameProduct,
-            UserId = request.UserId,
+
             CreateAt = DateTime.UtcNow,
         });
 
@@ -134,6 +135,7 @@ public class ProductService : IProductService
             Price = request.Price,
             ConditionId = request.ConditionId,
             UserId = existing.UserId,
+            Position = existing.Position,
             ImageURLs = request.ImageURLs.Where(img => !string.IsNullOrWhiteSpace(img)).Select(img => new ProductImage
             {
                 Id = Guid.NewGuid(),
@@ -156,7 +158,7 @@ public class ProductService : IProductService
         {
             ProductId = productid,
             productName = request.NameProduct,
-            UserId = request.UserId,
+
             UpdateAt = DateTime.UtcNow,
         });
         var updatedProduct = await _productStore.GetProductsIdAsync(productid);

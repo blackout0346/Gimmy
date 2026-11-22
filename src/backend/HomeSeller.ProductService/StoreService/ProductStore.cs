@@ -126,6 +126,7 @@ public class ProductStore : IProductStore
         existingProduct.Description = products.Description;
         existingProduct.Price = products.Price;
         existingProduct.ConditionId = products.ConditionId;
+        existingProduct.Position = products.Position;
 
         if (products.ImageURLs != null)
         {

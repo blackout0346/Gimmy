@@ -16,3 +16,7 @@ export interface CartResponse {
   userId: string;
   cartItems: CartItemResponse[];
 }
+  export interface FavoriteResponse{
+    userId: string;
+    productIds: string[];
+  }

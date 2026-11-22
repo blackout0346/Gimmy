@@ -4,11 +4,11 @@ namespace HomeSeller.CartService.Module;
 
 public class CartDbContext : DbContext
 {
+    public DbSet<FavoriteItem> FavoriteItem { get; set; }
     public DbSet<Cart> Cart { get; set; }
     public DbSet<CartItem> CartItem { get; set; }
-
-    public CartDbContext(DbContextOptions<CartDbContext> options) : base(options) { }
     
+    public CartDbContext(DbContextOptions<CartDbContext> options) : base(options) { }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

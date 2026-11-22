@@ -21,7 +21,6 @@ export const productService = {
 
   async uploadImages(files: File[]): Promise<string[]> {
     const formData = new FormData();
-  
     files.forEach((file) => formData.append('files', file));
 
     return apiFetch<string[]>(`${BASE_URL}/upload`, {
@@ -30,41 +29,58 @@ export const productService = {
     });
   },
 
-  async createProduct(request: ProductsRequest): Promise<ProductsResponse> {
+  async createProduct(
+    request: ProductsRequest,
+    imageFiles?: File[]
+  ): Promise<ProductsResponse> {
     let finalImageURLs = request.imageURLs ?? [];
 
-    if (request.imageFiles && request.imageFiles.length > 0) {
-      const uploadedUrls = await this.uploadImages(request.imageFiles);
+    if (imageFiles && imageFiles.length > 0) {
+      const uploadedUrls = await this.uploadImages(imageFiles);
       finalImageURLs = [...finalImageURLs, ...uploadedUrls];
     }
 
-    const { imageFiles: _, ...payload } = request;
+    const dtoPayload: ProductsRequest = {
+      nameProduct: request.nameProduct ?? '',
+      description: request.description ?? '',
+      price: Number(request.price) || 0,
+      imageURLs: finalImageURLs,
+      conditionId: request.conditionId,
+      position: request.position ?? '',
+      tagIds: request.tagIds ?? [],
+    };
 
     return apiFetch<ProductsResponse>(`${BASE_URL}/AddProduct`, {
       method: 'POST',
-      body: JSON.stringify({
-        ...payload,
-        imageURLs: finalImageURLs.length > 0 ? finalImageURLs : null,
-      }),
+      body: JSON.stringify(dtoPayload),
     });
   },
 
-  async updateProduct(productId: string, request: ProductsRequest): Promise<ProductsResponse> {
+  async updateProduct(
+    productId: string,
+    request: ProductsRequest,
+    imageFiles?: File[]
+  ): Promise<ProductsResponse> {
     let finalImageURLs = request.imageURLs ?? [];
 
-    if (request.imageFiles && request.imageFiles.length > 0) {
-      const uploadedUrls = await this.uploadImages(request.imageFiles);
+    if (imageFiles && imageFiles.length > 0) {
+      const uploadedUrls = await this.uploadImages(imageFiles);
       finalImageURLs = [...finalImageURLs, ...uploadedUrls];
     }
 
-    const { imageFiles: _, ...payload } = request;
+    const dtoPayload: ProductsRequest = {
+      nameProduct: request.nameProduct ?? '',
+      description: request.description ?? '',
+      price: Number(request.price) || 0,
+      imageURLs: finalImageURLs,
+      conditionId: request.conditionId,
+      position: request.position ?? '',
+      tagIds: request.tagIds ?? [],
+    };
 
     return apiFetch<ProductsResponse>(`${BASE_URL}/UpdateProduct/${productId}`, {
       method: 'PUT',
-      body: JSON.stringify({
-        ...payload,
-        imageURLs: finalImageURLs.length > 0 ? finalImageURLs : null,
-      }),
+      body: JSON.stringify(dtoPayload),
     });
   },
 

@@ -23,33 +23,6 @@ namespace HomeSellerServer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("HomeSellerServer.Module.Role", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RoleName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Roles", "SellShop.Auth");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
-                            RoleName = "Seller"
-                        },
-                        new
-                        {
-                            Id = new Guid("33333333-3333-3333-3333-333333333333"),
-                            RoleName = "Buyer"
-                        });
-                });
-
             modelBuilder.Entity("HomeSellerServer.Module.Users", b =>
                 {
                     b.Property<Guid>("Id")
@@ -67,33 +40,15 @@ namespace HomeSellerServer.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uuid");
-
                     b.Property<bool>("isDeleted")
                         .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RoleId");
+                    b.HasIndex("Login")
+                        .IsUnique();
 
                     b.ToTable("Users", "SellShop.Auth");
-                });
-
-            modelBuilder.Entity("HomeSellerServer.Module.Users", b =>
-                {
-                    b.HasOne("HomeSellerServer.Module.Role", "Role")
-                        .WithMany("Users")
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Role");
-                });
-
-            modelBuilder.Entity("HomeSellerServer.Module.Role", b =>
-                {
-                    b.Navigation("Users");
                 });
 #pragma warning restore 612, 618
         }

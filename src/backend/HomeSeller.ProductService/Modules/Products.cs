@@ -18,5 +18,8 @@ public class Products
   
     public DateTime CreateAt { get; set; } = DateTime.UtcNow;
     public ICollection<ProductTag> ProductTags { get; set; } = new List<ProductTag>();
+    public string Position { get; set; }
     public bool isDeleted { get; set; } = false;
+    
+  
 }

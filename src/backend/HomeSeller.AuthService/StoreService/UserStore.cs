@@ -12,7 +12,6 @@ namespace HomeSellerServer.StoreService
     
         private readonly AppDbContext _appDbContext;
 
-
         public UserStore(AppDbContext appDbContext)
         {
 
@@ -30,6 +29,19 @@ namespace HomeSellerServer.StoreService
             return await _appDbContext.Users.AnyAsync(u => u.Login == login);
         }
 
+        public async Task<Users?> FindByLoginAsync(string login)
+        {
+            return await _appDbContext.Users
+                .AsNoTracking()
+                .Where(e => e.Login == login)
+                .Select(e => new Users 
+                { 
+                    Id = e.Id, 
+                    Login = e.Login, 
+                    HashPassword = e.HashPassword 
+                })
+                .FirstOrDefaultAsync();
+        }
         public async Task<bool> UpdateUserAsync(Users updatedUser)
         {
             var existingUser = await _appDbContext.Users
@@ -42,7 +54,7 @@ namespace HomeSellerServer.StoreService
 
 
             existingUser.HashPassword = updatedUser.HashPassword;
-            existingUser.RoleId = updatedUser.RoleId;
+
 
             await _appDbContext.SaveChangesAsync();
       

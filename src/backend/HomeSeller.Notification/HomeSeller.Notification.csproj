@@ -8,11 +8,12 @@
 
     <ItemGroup>
       <PackageReference Include="DotNetEnv" Version="3.2.0" />
-      <PackageReference Include="MassTransit" Version="9.3.0-develop.235" />
-      <PackageReference Include="MassTransit.RabbitMQ" Version="9.3.0-develop.235" />
+      <PackageReference Include="MassTransit" Version="8.5.12" />
+      <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.12" />
       <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
       <PackageReference Include="StackExchange.Redis" Version="4.0.146-alpha" />
+      <PackageReference Include="Swashbuckle.AspNetCore" Version="11.0.1" />
     </ItemGroup>
 
     <ItemGroup>

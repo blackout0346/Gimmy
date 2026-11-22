@@ -62,6 +62,26 @@ namespace HomeSeller.CartService.Migrations
                     b.ToTable("CartItem", "SellShop.Cart");
                 });
 
+            modelBuilder.Entity("HomeSeller.CartService.Module.FavoriteItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("FavoriteItem", "SellShop.Cart");
+                });
+
             modelBuilder.Entity("HomeSeller.CartService.Module.CartItem", b =>
                 {
                     b.HasOne("HomeSeller.CartService.Module.Cart", "Cart")

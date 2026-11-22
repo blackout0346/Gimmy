@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: homeseller-postgres-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql # Изменено: убран /data на конце
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: homeseller-rabbitmq-local
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RabbitMQ__Username}
+      RABBITMQ_DEFAULT_PASS: ${RabbitMQ__Password}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: homeseller-redis-local
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${Redis__Password}
+    ports:
+      - "${Redis__Port:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${Redis__Password}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  redis_data:

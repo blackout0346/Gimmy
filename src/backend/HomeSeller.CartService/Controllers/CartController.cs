@@ -1,5 +1,6 @@
 ﻿using System.Security.Claims;
 using HomeSeller.CartService.DTOs.Cart;
+using HomeSeller.CartService.DTOs.Favorite;
 using HomeSeller.CartService.Interfaces;
 using HomeSeller.CartService.Module;
 using Microsoft.AspNetCore.Authorization;
@@ -34,7 +35,7 @@ public class CartController : ControllerBase
         try
         {
             var userId = GetUserId();
-            var result = _cartService.AddItemAsync(userId, request);
+            var result =await _cartService.AddItemAsync(userId, request);
             return Ok(result);
         }
         catch (Exception ex)
@@ -108,7 +109,63 @@ public class CartController : ControllerBase
             return BadRequest(ex.Message);
         }
     }
-
+    [HttpGet("favorites")]
+    [ProducesResponseType(typeof(FavoriteResponse), 200)]
+    public async Task<ActionResult> GetFavorites()
+    {
+        try
+        {
+            var userId = GetUserId();
+            var result = await _cartService.GetFavorite(userId);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+    [HttpPost("favorites/{productId:guid}")]
+    [ProducesResponseType(typeof(FavoriteResponse), 200)]
+    public async Task<ActionResult> AddFavorite([FromRoute] Guid productId)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var result = await _cartService.AddFavorite(userId, productId);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+    [HttpDelete("favorites/{productId:guid}")]
+    [ProducesResponseType(typeof(FavoriteResponse), 200)]
+    public async Task<ActionResult> RemoveFavorite([FromRoute] Guid productId)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var result = await _cartService.RemoveFavorite(userId, productId);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
     private Guid GetUserId()
     {
         var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value

@@ -3,6 +3,7 @@ using HomeSeller.CartService.Module;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 using HomeSeller.Shared.CacheHelper;
+using MassTransit.Initializers;
 
 namespace HomeSeller.CartService.StoreServices;
 
@@ -15,6 +16,43 @@ public class CartStore : ICartStore
     {
 
         _cartDbContext = context;
+    }
+
+  
+
+    public async Task<List<FavoriteItem>> GetFavorites(Guid userId)
+    {
+        
+     return await _cartDbContext.FavoriteItem.AsNoTracking().Where(f => f.UserId == userId).ToListAsync();
+    
+    }
+
+    public async Task AddFavoriteItemAsync(Guid userId, Guid productId)
+    {
+        var exists = await _cartDbContext.FavoriteItem
+            .AnyAsync(f => f.UserId == userId && f.ProductId == productId);
+        if (exists)
+        {
+            return;
+        }
+        var favorite = new FavoriteItem()
+        {
+            ProductId = productId,
+            UserId = userId,
+        };
+        await _cartDbContext.FavoriteItem.AddAsync(favorite);
+        await _cartDbContext.SaveChangesAsync();
+    }
+
+    public async Task RemoveFavoriteItemAsync(Guid userId, Guid productId)
+    {
+        var item = await _cartDbContext.FavoriteItem.FirstOrDefaultAsync(f => f.ProductId == productId && f.UserId == userId);
+        if (item == null)
+        {
+          return;
+        }
+        _cartDbContext.FavoriteItem.Remove(item);
+        await _cartDbContext.SaveChangesAsync();
     }
 
     public async Task AddItemAsync(CartItem cartItem, Guid userId)
@@ -64,7 +102,7 @@ public class CartStore : ICartStore
             return false;
         }
 
-        var item = await _cartDbContext.CartItem.FirstOrDefaultAsync(c => c.ProductId == productId);
+        var item =  cart.CartItems.FirstOrDefault(c => c.ProductId == productId);
         if (item != null)
         {
             cart.CartItems.Remove(item);

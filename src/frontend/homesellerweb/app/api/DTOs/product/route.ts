@@ -4,13 +4,11 @@ export interface ProductsRequest {
   nameProduct: string;
   description: string;
   price: number;
-  imageURLs: string[] | null;
-  imageFiles?: File[] | null;
+  imageURLs: string[];
   conditionId: string;
-  userId: string;
+  position: string;
   tagIds: string[];
 }
-
 export interface ProductsResponse {
   id: string;
   nameProduct: string;
@@ -22,5 +20,6 @@ export interface ProductsResponse {
   nameCondition: string;
   userId: string;
   sellerLogin: string;
+  position: string;
   tags: string[];
 }

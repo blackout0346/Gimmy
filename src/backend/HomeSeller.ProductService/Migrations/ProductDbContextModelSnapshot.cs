@@ -36,6 +36,18 @@ namespace ProductService.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Condition", "SellShop.Product");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("11111111-1111-1111-1111-111111111111"),
+                            NameCondition = "Новое"
+                        },
+                        new
+                        {
+                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
+                            NameCondition = "Б/У"
+                        });
                 });
 
             modelBuilder.Entity("ProductService.Module.ProductImage", b =>
@@ -100,6 +112,10 @@ namespace ProductService.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Position")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<decimal>("Price")
                         .HasColumnType("numeric(18,2)");
 
@@ -112,6 +128,8 @@ namespace ProductService.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ConditionId");
+
+                    b.HasIndex("NameProduct");
 
                     b.ToTable("Products", "SellShop.Product");
                 });
