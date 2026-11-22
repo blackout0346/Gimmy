@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Onest } from "next/font/google";
 import "./globals.css";
-import { NotificationProvider } from "@/app/provider/NotificationProvider";
-import { MessengerProvider } from "@/app/provider/MessengerProvider";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+import { NotificationProvider } from '../app/provider/NotificationProvider';
+const onest = Onest({
+  variable: "--font-onest",
+  subsets: ["latin", "cyrillic"],
 });
 
 const geistMono = Geist_Mono({
@@ -25,12 +23,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ru">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <NotificationProvider>
-          <MessengerProvider>{children}</MessengerProvider>
-        </NotificationProvider>
-      </body>
+    <html
+      lang="ru"
+      className={`${onest.variable} ${geistMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col m-20 my-15">
+        <NotificationProvider>{children}</NotificationProvider></body>
     </html>
   );
 }

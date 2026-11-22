@@ -1,7 +1,5 @@
 import * as React from "react"
 import { cn } from "cn"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 function Card({
   className,
   size = "default",
@@ -12,7 +10,7 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground ring-1 ring-foreground/10 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
+        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground border border-border [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
         className
       )}
       {...props}
@@ -20,18 +18,18 @@ function Card({
   )
 }
 
-function CardImage({children, className, ...props}: React.ComponentProps<"img">)  {
+function CardImage({ className, alt = "", ...props }: React.ComponentProps<"img">) {
   return (
-    <Card className="relative mx-auto w-full max-w-sm pt-0">
-      <div className="absolute inset-0 z-30 aspect-video bg-black/35" />
-      <img
-        {...props}
-        className="relative z-20 aspect-video w-full object-cover brightness-60 grayscale dark:brightness-40"
-      />
-  
-    </Card>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      data-slot="card-image"
+      alt={alt}
+      className={cn("aspect-[4/3] w-full bg-muted object-cover", className)}
+      {...props}
+    />
   )
 }
+
 function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -62,7 +60,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
-      
+
       className={cn(" text-sm text-center  text-muted-foreground   ", className)}
       {...props}
     />
