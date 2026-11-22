@@ -12,6 +12,7 @@ public class ProductDbContext : DbContext
     public DbSet<Condition> Condition { get; set; } 
     public DbSet<Tags> Tags { get; set; }
     public DbSet<ProductTag> ProductTags { get; set; }
+    public DbSet<ProductImage>  ProductImage { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,7 +23,15 @@ public class ProductDbContext : DbContext
             new Condition { Id = Guid.Parse("22222222-2222-2222-2222-222222222222"), NameCondition = "Б/У" }
         );
        
+        modelBuilder.Entity<ProductImage>(entity =>
+        {
+            entity.HasQueryFilter(pi => !pi.Products.isDeleted);
 
+            entity.HasOne(pi => pi.Products)
+                .WithMany(p => p.ImageURLs)
+                .HasForeignKey(pi => pi.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<Tags>(entity =>
         {
             entity.HasOne(t => t.ParentTag)
@@ -30,8 +39,11 @@ public class ProductDbContext : DbContext
                 .HasForeignKey(t => t.ParentTagId)
                 .OnDelete(DeleteBehavior.Restrict); 
         });
-  
 
+        modelBuilder.Entity<Products>(entity =>
+        {
+            entity.HasIndex(e => e.NameProduct);
+        });
         modelBuilder.Entity<Products>(entity =>
         {
             entity.HasQueryFilter(p => !p.isDeleted);

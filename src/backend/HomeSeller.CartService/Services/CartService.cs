@@ -1,5 +1,6 @@
 ﻿using System.Security.Claims;
 using HomeSeller.CartService.DTOs.Cart;
+using HomeSeller.CartService.DTOs.Favorite;
 using HomeSeller.CartService.Interfaces;
 using HomeSeller.CartService.Module;
 using HomeSeller.Shared.CacheHelper;
@@ -22,6 +23,41 @@ public class CartService : ICartService
         _logger = logger;
     }
 
+
+    public async Task<FavoriteResponse> GetFavorite(Guid userId)
+    {
+        var cachekey = $"favorites:id:{userId}";
+        var cachequery = await CacheHelper.GetCacheAsync<FavoriteResponse>(_redis, _logger, cachekey);
+        if (cachequery != null)
+        {
+            return cachequery;
+        }
+    
+        var item = await _cartstore.GetFavorites(userId);
+        var response = new FavoriteResponse
+        {
+            UserId = userId,
+            ProductIds = item.Select(e => e.ProductId).ToList()
+        };
+        await CacheHelper.SetCacheAsync(_redis, _logger, response, cachekey, _cacheExpiry);
+        return response;
+
+    }
+
+    public async Task<FavoriteResponse> AddFavorite(Guid userId, Guid productId)
+    {
+        
+        await _cartstore.AddFavoriteItemAsync(userId, productId);
+        await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"favorites:id:{userId}");
+        return await GetFavorite(userId);
+    }
+
+    public async Task<FavoriteResponse> RemoveFavorite(Guid userId, Guid productId)
+    {
+        await _cartstore.RemoveFavoriteItemAsync(userId, productId);
+        await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"favorites:id:{userId}");
+        return await GetFavorite(userId);
+    }
 
     public async Task<CartResponse> GetCartByUserIdAsync(Guid userId)
     {
@@ -57,13 +93,13 @@ public class CartService : ICartService
         await _cartstore.RemoveItemAsync(productId, userId);
 
         var updatedCart = await _cartstore.GetCartByUserIdAsync(userId);
-        await CacheHelper.InvalidateCacheAsync(_redis, _logger, "cart:id");
+        await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"cart:id{userId}");
         return MapToResponse(updatedCart, userId);
     }
 
     public async Task ClearCartAsync(Guid userId)
     {
-        await CacheHelper.InvalidateCacheAsync(_redis, _logger, "cart:id");
+        await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"cart:id{userId}");
         await _cartstore.ClearCartAsync(userId);
     }
 

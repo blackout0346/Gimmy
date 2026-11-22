@@ -20,4 +20,6 @@ public class Products
     public ICollection<ProductTag> ProductTags { get; set; } = new List<ProductTag>();
     public string Position { get; set; }
     public bool isDeleted { get; set; } = false;
+    
+  
 }

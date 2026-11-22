@@ -327,6 +327,9 @@ public class MessangerService : IMessangerService
         {
             Id = c.Id,
             ProductId = c.ProductId,
+            // UserName1 =c.UserName1,
+            // UserName2 = c.UserName2,
+            //
             UserId1 = c.UserId1,
             UserId2 = c.UserId2,
             CreateAt = c.CreateAt

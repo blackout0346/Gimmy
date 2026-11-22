@@ -5,15 +5,18 @@ import * as signalR from '@microsoft/signalr';
 import { authService } from './api/Services/auth.service';
 import { productService } from './api/Services/product.service';
 import { cartService } from './api/Services/cart.service';
+import { favoriteService } from './api/Services/favorite.service';
 import { messengerService } from './api/Services/messenger.service';
 import { useNotifications } from './provider/NotificationProvider';
 import { useMessenger } from './provider/MessengerProvider';
 import { ProductsResponse } from './api/DTOs/product/route';
-import { CartResponse } from './api/DTOs/cart/route';
+import { CartResponse, FavoriteResponse } from './api/DTOs/cart/route';
 import { tokenStorage } from '@/lib/http';
 
 const MESSENGER_API_URL =
   process.env.NEXT_PUBLIC_MESSENGER_API_URL || 'http://localhost:5214';
+const PRODUCT_API_URL =
+  process.env.NEXT_PUBLIC_PRODUCT_API_URL || 'http://localhost:5030';
 
 const CONDITION_NEW = '11111111-1111-1111-1111-111111111111';
 const CONDITION_USED = '22222222-2222-2222-2222-222222222222';
@@ -23,7 +26,7 @@ const MOCK_PRODUCTS = [
     nameProduct: 'iPhone 15 Pro 256GB',
     price: 98500,
     description: 'Идеальное состояние, полный комплект, АКБ 96%.',
-    Position: 'Москва',
+    position: 'Москва',
     conditionId: CONDITION_USED,
     imageURLs: ['https://picsum.photos/seed/iphone15/400/300'],
     tagIds: [] as string[],
@@ -32,7 +35,7 @@ const MOCK_PRODUCTS = [
     nameProduct: 'Механическая клавиатура Keychron K2',
     price: 8900,
     description: 'Свитчи Gateron Brown, горячая замена, RGB-подсветка.',
-    Position: 'Санкт-Петербург',
+    position: 'Санкт-Петербург',
     conditionId: CONDITION_NEW,
     imageURLs: ['https://picsum.photos/seed/keychron/400/300'],
     tagIds: [] as string[],
@@ -41,7 +44,7 @@ const MOCK_PRODUCTS = [
     nameProduct: 'Наушники Sony WH-1000XM5',
     price: 27400,
     description: 'Отличное шумоподавление, кейс и кабель в комплекте.',
-    Position: 'Казань',
+    position: 'Казань',
     conditionId: CONDITION_NEW,
     imageURLs: ['https://picsum.photos/seed/sonyxm5/400/300'],
     tagIds: [] as string[],
@@ -50,7 +53,7 @@ const MOCK_PRODUCTS = [
     nameProduct: 'Монитор LG UltraGear 27" 144Hz',
     price: 24900,
     description: 'IPS матрица, 2K разрешение, без битых пикселей.',
-    Position: 'Екатеринбург',
+    position: 'Екатеринбург',
     conditionId: CONDITION_USED,
     imageURLs: ['https://picsum.photos/seed/lgmonitor/400/300'],
     tagIds: [] as string[],
@@ -58,6 +61,12 @@ const MOCK_PRODUCTS = [
 ];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function getProductImageUrl(url?: string | null): string | null {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${PRODUCT_API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+}
 
 function getCurrentUserIdFromToken(): string | null {
   const token = tokenStorage.get();
@@ -83,6 +92,7 @@ export function DashboardExample() {
   const [selectedProduct, setSelectedProduct] =
     useState<ProductsResponse | null>(null);
   const [cart, setCart] = useState<CartResponse | null>(null);
+  const [favorites, setFavorites] = useState<FavoriteResponse | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -171,6 +181,50 @@ export function DashboardExample() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages.length, activeChatId]);
 
+  // --- Хелперы имён для чатов и сообщений ---
+
+  const getChatProduct = (productId: string) =>
+    products.find((p) => p.id === productId);
+
+  const getChatProductName = (chat: (typeof chats)[number]) => {
+    const product = getChatProduct(chat.productId);
+    return (
+      (chat as any).productName ||
+      product?.nameProduct ||
+      'Неизвестный товар'
+    );
+  };
+
+  const getInterlocutorName = (chat: (typeof chats)[number]) => {
+    const product = getChatProduct(chat.productId);
+    if ((chat as any).interlocutorName) return (chat as any).interlocutorName;
+    if ((chat as any).targetUserName) return (chat as any).targetUserName;
+    if (product?.sellerLogin) {
+      if (
+        currentUserId &&
+        product.userId?.toLowerCase() === currentUserId.toLowerCase()
+      ) {
+        return 'Покупатель';
+      }
+      return product.sellerLogin;
+    }
+    return 'Собеседник';
+  };
+
+  const getReplyAuthorName = (
+    reply: NonNullable<(typeof currentMessages)[number]['reply']>
+  ) => {
+    if (
+      currentUserId &&
+      reply.userId.toLowerCase() === currentUserId.toLowerCase()
+    ) {
+      return loginInput || 'Вы';
+    }
+    if ((reply as any).senderName) return (reply as any).senderName;
+    if (activeChat) return getInterlocutorName(activeChat);
+    return 'Собеседник';
+  };
+
   // --- Авторизация ---
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -181,6 +235,8 @@ export function DashboardExample() {
       setCurrentUserId(getCurrentUserIdFromToken());
       const userCart = await cartService.getCart();
       setCart(userCart);
+      const userFavorites = await favoriteService.getFavorite();
+      setFavorites(userFavorites);
       await connect();
     } catch (error) {
       showError(error, 'Ошибка входа');
@@ -189,13 +245,12 @@ export function DashboardExample() {
 
   // --- Симуляция ---
 
- const handleRunSimulation = async () => {
+  const handleRunSimulation = async () => {
     setIsSimulating(true);
     setErrorMsg(null);
     setSimLogs([]);
 
     try {
-      // 1. Авторизация (если пользователя нет — пробуем зарегистрировать)
       addSimLog(`Авторизация под "${loginInput}"...`);
       try {
         await authService.login({ login: loginInput, password: passwordInput });
@@ -225,18 +280,18 @@ export function DashboardExample() {
       addSimLog('Успешный вход и подключение к SignalR.');
       await sleep(400);
 
-      // Получаем состояния из БД (если метод есть в productService)
       let dbConditions: { id: string; nameCondition: string }[] = [];
       if (typeof (productService as any).getConditions === 'function') {
         try {
           dbConditions = await (productService as any).getConditions();
           addSimLog(`Загружено состояний из БД: ${dbConditions.length}`);
         } catch {
-          addSimLog('Не удалось загрузить состояния из БД, используем ID по умолчанию.');
+          addSimLog(
+            'Не удалось загрузить состояния из БД, используем ID по умолчанию.'
+          );
         }
       }
 
-      // 2. Пошаговое добавление товаров
       for (let i = 0; i < MOCK_PRODUCTS.length; i++) {
         const item = MOCK_PRODUCTS[i];
         const conditionId =
@@ -245,10 +300,9 @@ export function DashboardExample() {
             : item.conditionId;
 
         addSimLog(`Добавление товара: ${item.nameProduct}...`);
-        await (productService as any).createProduct({
+        await productService.createProduct({
           ...item,
           conditionId,
-          userId: uid,
         });
         await sleep(350);
       }
@@ -258,7 +312,6 @@ export function DashboardExample() {
       addSimLog(`Каталог обновлён (всего товаров: ${updatedProducts.length}).`);
       await sleep(400);
 
-      // 3. Наполнение корзины (берём первые 2 товара)
       const itemsForCart = updatedProducts.slice(0, 2);
       for (const prod of itemsForCart) {
         addSimLog(`В корзину: ${prod.nameProduct}`);
@@ -270,7 +323,31 @@ export function DashboardExample() {
       addSimLog(`Корзина обновлена (позиций: ${updatedCart.cartItems.length}).`);
       await sleep(400);
 
-      // 4. Симуляция диалога в мессенджере
+      const itemsForFavorite = updatedProducts.slice(0, 2);
+      for (const prod of itemsForFavorite) {
+        addSimLog(`В избранное: ${prod.nameProduct}`);
+        await favoriteService.addFavorite(prod.id);
+        await sleep(300);
+      }
+
+      let updatedFavorites = await favoriteService.getFavorite();
+      setFavorites(updatedFavorites);
+      addSimLog(
+        `Избранное загружено (товаров: ${updatedFavorites.productIds?.length ?? 0}).`
+      );
+      await sleep(300);
+
+      if (itemsForFavorite.length > 1) {
+        const toRemove = itemsForFavorite[1];
+        addSimLog(`Удаление из избранного: ${toRemove.nameProduct}`);
+        updatedFavorites = await favoriteService.removeFavorite(toRemove.id);
+        setFavorites(updatedFavorites);
+        addSimLog(
+          `После удаления в избранном: ${updatedFavorites.productIds?.length ?? 0}.`
+        );
+        await sleep(300);
+      }
+
       const firstProduct = updatedProducts[0];
       if (firstProduct) {
         addSimLog(`Открываем чат по товару "${firstProduct.nameProduct}"...`);
@@ -286,7 +363,6 @@ export function DashboardExample() {
         await handleSelectChat(chat.id);
         await sleep(500);
 
-        // Первое сообщение с индикатором печати
         addSimLog('Симуляция печати и отправка сообщения #1...');
         sendTypingStatus(chat.id, true);
         await sleep(900);
@@ -299,7 +375,6 @@ export function DashboardExample() {
         sendTypingStatus(chat.id, false);
         await sleep(700);
 
-        // Второе сообщение с тестовым файлом
         addSimLog('Загрузка вложения и отправка сообщения #2...');
         const mockFile = new File(
           [`Заявка на осмотр: ${firstProduct.nameProduct}`],
@@ -325,6 +400,7 @@ export function DashboardExample() {
       setIsSimulating(false);
     }
   };
+
   const handleSimulateIncoming = async () => {
     setIsSimulating(true);
     setErrorMsg(null);
@@ -347,7 +423,6 @@ export function DashboardExample() {
         await connect();
       }
 
-      // 1. Получаем токен второго пользователя (бота), не ломая текущую сессию
       const botLogin = 'bot_buyer';
       const botPassword = 'password123';
       addSimLog(`Авторизация собеседника "${botLogin}"...`);
@@ -373,14 +448,12 @@ export function DashboardExample() {
       const botToken = tokenStorage.get();
       const botUserId = getCurrentUserIdFromToken();
 
-      // Сразу возвращаем ваш основной токен обратно
       (tokenStorage as any).set(myToken);
 
       if (!botToken || !botUserId) {
         throw new Error('Не удалось получить токен собеседника.');
       }
 
-      // 2. Открываем/создаём чат между вами и ботом
       const targetProduct = products[0];
       const productId =
         targetProduct?.id || '00000000-0000-0000-0000-000000000001';
@@ -395,7 +468,6 @@ export function DashboardExample() {
       });
       await handleSelectChat(chat.id);
 
-      // 3. Подключаем бота к SignalR Hub отдельно от вашего соединения
       addSimLog('Собеседник подключается к SignalR...');
       botConnection = new signalR.HubConnectionBuilder()
         .withUrl(`${MESSENGER_API_URL}/hubs/messenger`, {
@@ -407,7 +479,6 @@ export function DashboardExample() {
       await botConnection.start();
       await botConnection.invoke('JoinChat', chat.id);
 
-      // 4. Сценарий входящих сообщений
       const incomingMessages = [
         `Привет! Увидел объявление "${productName}", ещё актуально?`,
         'Состояние действительно хорошее? Можно сегодня вечером подъехать посмотреть?',
@@ -432,7 +503,6 @@ export function DashboardExample() {
 
       addSimLog('✅ Симуляция входящих сообщений завершена!');
     } catch (error) {
-      // На всякий случай восстанавливаем основной токен при ошибке
       if (myToken) (tokenStorage as any).set(myToken);
       const msg = error instanceof Error ? error.message : 'Ошибка симуляции';
       addSimLog(`❌ Ошибка: ${msg}`);
@@ -445,7 +515,7 @@ export function DashboardExample() {
     }
   };
 
-  // --- Товары и Корзина ---
+  // --- Товары, Корзина и Избранное ---
 
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -454,18 +524,12 @@ export function DashboardExample() {
     setErrorMsg(null);
     setIsCreatingProduct(true);
     try {
-      const uid =
-        currentUserId ||
-        getCurrentUserIdFromToken() ||
-        '00000000-0000-0000-0000-000000000000';
-
-      await (productService as any).createProduct({
+      await productService.createProduct({
         nameProduct: newProductName.trim(),
         price: Number(newProductPrice),
         description: newProductDescription.trim(),
-        Position: 'Москва',
+        position: 'Москва',
         conditionId: CONDITION_NEW,
-        userId: uid,
         imageURLs: ['https://picsum.photos/seed/newproduct/400/300'],
         tagIds: [],
       });
@@ -493,6 +557,19 @@ export function DashboardExample() {
     }
   };
 
+  const handleToggleFavorite = async (productId: string) => {
+    setErrorMsg(null);
+    try {
+      const isFav = favorites?.productIds?.includes(productId);
+      const updated = isFav
+        ? await favoriteService.removeFavorite(productId)
+        : await favoriteService.addFavorite(productId);
+      setFavorites(updated);
+    } catch (error) {
+      showError(error, 'Ошибка при обновлении избранного');
+    }
+  };
+
   // --- Мессенджер ---
 
   const handleSelectChat = async (chatId: string) => {
@@ -516,7 +593,7 @@ export function DashboardExample() {
     setErrorMsg(null);
     try {
       const targetUserId =
-        (product as any).userId || '00000000-0000-0000-0000-000000000000';
+        product.userId || '00000000-0000-0000-0000-000000000000';
 
       const chat = await startOrGetChat({
         productId: product.id,
@@ -626,7 +703,7 @@ export function DashboardExample() {
           </span>
           {currentUserId && (
             <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-500">
-              UID: {currentUserId.slice(0, 8)}
+              Пользователь: {loginInput}
             </span>
           )}
         </div>
@@ -663,16 +740,17 @@ export function DashboardExample() {
           >
             {isSimulating ? 'Симуляция...' : '▶ Запустить симуляцию'}
           </button>
+
+          <button
+            type="button"
+            onClick={handleSimulateIncoming}
+            disabled={isSimulating}
+            className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-teal-700 disabled:opacity-50"
+          >
+            {isSimulating ? 'Пишет...' : '💬 Мне пишут'}
+          </button>
         </div>
       </header>
-      <button
-  type="button"
-  onClick={handleSimulateIncoming}
-  disabled={isSimulating}
-  className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-teal-700 disabled:opacity-50"
->
-  {isSimulating ? 'Пишет...' : '💬 Мне пишут'}
-</button>
 
       {/* Лог симуляции */}
       {simLogs.length > 0 && (
@@ -715,11 +793,14 @@ export function DashboardExample() {
         <div className="space-y-6 lg:col-span-5">
           {/* Каталог и форма добавления */}
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">
                 Каталог ({products.length})
               </h2>
               <div className="flex items-center gap-2">
+                <span className="rounded-md bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-600">
+                  Избранное: {favorites?.productIds?.length ?? 0}
+                </span>
                 <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                   Корзина: {cart?.cartItems.length ?? 0}
                 </span>
@@ -786,48 +867,80 @@ export function DashboardExample() {
               <p className="text-sm text-slate-400">Товары не найдены</p>
             ) : (
               <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto pr-1">
-                {products.map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex items-center justify-between gap-2 py-3 first:pt-0 last:pb-0"
-                  >
-                    <div className="min-w-0 flex-1">
+                {products.map((p) => {
+                  const isFav = favorites?.productIds?.includes(p.id);
+                  const thumbUrl = getProductImageUrl(p.imageURLs?.[0]);
+
+                  return (
+                    <li
+                      key={p.id}
+                      className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                    >
                       <button
                         type="button"
                         onClick={() => setSelectedProduct(p)}
-                        className="truncate text-left font-medium text-slate-900 hover:text-blue-600 hover:underline"
+                        className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
                       >
-                        {p.nameProduct}
+                        {thumbUrl ? (
+                          <img
+                            src={thumbUrl}
+                            alt={p.nameProduct}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">
+                            Нет фото
+                          </div>
+                        )}
                       </button>
-                      <p className="text-sm font-semibold text-slate-600">
-                        {p.price} ₽
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedProduct(p)}
-                        className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
-                      >
-                        Просмотр
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAddToCart(p.id)}
-                        className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium transition hover:bg-slate-50"
-                      >
-                        В корзину
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleStartChatWithSeller(p)}
-                        className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-700"
-                      >
-                        Чат
-                      </button>
-                    </div>
-                  </li>
-                ))}
+
+                      <div className="min-w-0 flex-1">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProduct(p)}
+                          className="block w-full truncate text-left font-medium text-slate-900 hover:text-blue-600 hover:underline"
+                        >
+                          {p.nameProduct}
+                        </button>
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <span className="font-semibold text-slate-700">
+                            {p.price} ₽
+                          </span>
+                          {p.sellerLogin && <span>• {p.sellerLogin}</span>}
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFavorite(p.id)}
+                          title="В избранное"
+                          className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
+                            isFav
+                              ? 'border-rose-300 bg-rose-50 text-rose-600'
+                              : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          {isFav ? '♥' : '♡'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAddToCart(p.id)}
+                          className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium transition hover:bg-slate-50"
+                        >
+                          В корзину
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStartChatWithSeller(p)}
+                          className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-700"
+                        >
+                          Чат
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
@@ -880,6 +993,9 @@ export function DashboardExample() {
               ) : (
                 chats.map((chat) => {
                   const isActive = chat.id === activeChatId;
+                  const productName = getChatProductName(chat);
+                  const interlocutorName = getInterlocutorName(chat);
+
                   return (
                     <button
                       key={chat.id}
@@ -890,16 +1006,16 @@ export function DashboardExample() {
                           : 'hover:bg-slate-100'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-slate-900">
-                          Чат #{chat.id.slice(0, 6)}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-semibold text-slate-900">
+                          {interlocutorName}
                         </span>
-                        <span className="text-[10px] text-slate-400">
+                        <span className="shrink-0 text-[10px] text-slate-400">
                           {new Date(chat.createAt).toLocaleDateString()}
                         </span>
                       </div>
                       <p className="mt-1 truncate text-xs text-slate-500">
-                        Товар: {chat.productId.slice(0, 8)}...
+                        {productName}
                       </p>
                     </button>
                   );
@@ -913,12 +1029,12 @@ export function DashboardExample() {
             {activeChat ? (
               <>
                 <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">
-                      Диалог #{activeChat.id.slice(0, 8)}
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-bold text-slate-900">
+                      {getInterlocutorName(activeChat)}
                     </h3>
-                    <p className="text-xs text-slate-500">
-                      ID товара: {activeChat.productId}
+                    <p className="truncate text-xs text-slate-500">
+                      Товар: {getChatProductName(activeChat)}
                     </p>
                   </div>
                   {hasMore && currentMessages.length >= 50 && (
@@ -973,7 +1089,7 @@ export function DashboardExample() {
                                 }`}
                               >
                                 <p className="font-semibold">
-                                  Пользователь {msg.reply.userId.slice(0, 6)}
+                                  {getReplyAuthorName(msg.reply)}
                                 </p>
                                 <p className="truncate">{msg.reply.text}</p>
                               </div>
@@ -1088,7 +1204,8 @@ export function DashboardExample() {
 
                 {/* Индикатор печати */}
                 <div className="h-5 px-4 text-xs italic text-slate-400">
-                  {currentTyping.length > 0 && 'Собеседник печатает...'}
+                  {currentTyping.length > 0 &&
+                    `${getInterlocutorName(activeChat)} печатает...`}
                 </div>
 
                 {/* Плашка ответа / редактирования */}
@@ -1223,13 +1340,14 @@ export function DashboardExample() {
             className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-start justify-between">
+            <div className="mb-3 flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">
                   {selectedProduct.nameProduct}
                 </h3>
-                <p className="text-xs text-slate-400">
-                  ID: {selectedProduct.id}
+                <p className="text-xs text-slate-500">
+                  Продавец: {selectedProduct.sellerLogin || 'Неизвестно'}
+                  {selectedProduct.position ? ` • ${selectedProduct.position}` : ''}
                 </p>
               </div>
               <button
@@ -1241,16 +1359,46 @@ export function DashboardExample() {
               </button>
             </div>
 
+            {/* Фотографии товара */}
+            {selectedProduct.imageURLs && selectedProduct.imageURLs.length > 0 && (
+              <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+                {selectedProduct.imageURLs.map((rawUrl, idx) => {
+                  const fullUrl = getProductImageUrl(rawUrl);
+                  if (!fullUrl) return null;
+                  return (
+                    <img
+                      key={idx}
+                      src={fullUrl}
+                      alt={`${selectedProduct.nameProduct} ${idx + 1}`}
+                      className="h-44 w-full shrink-0 rounded-xl border border-slate-200 object-cover"
+                    />
+                  );
+                })}
+              </div>
+            )}
+
             <div className="mb-4 text-2xl font-bold text-blue-600">
               {selectedProduct.price} ₽
             </div>
 
             <div className="mb-6 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
-              {(selectedProduct as any).description ||
-                'Описание товара отсутствует.'}
+              {selectedProduct.description || 'Описание товара отсутствует.'}
             </div>
 
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => handleToggleFavorite(selectedProduct.id)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                  favorites?.productIds?.includes(selectedProduct.id)
+                    ? 'border-rose-300 bg-rose-50 text-rose-600'
+                    : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {favorites?.productIds?.includes(selectedProduct.id)
+                  ? '♥ В избранном'
+                  : '♡ В избранное'}
+              </button>
               <button
                 type="button"
                 onClick={() => {

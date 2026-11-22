@@ -129,6 +129,8 @@ namespace ProductService.Migrations
 
                     b.HasIndex("ConditionId");
 
+                    b.HasIndex("NameProduct");
+
                     b.ToTable("Products", "SellShop.Product");
                 });
 

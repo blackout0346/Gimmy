@@ -133,7 +133,7 @@ using (var scope = app.Services.CreateScope())
 
     // await context.Database.EnsureDeletedAsync();
     // await context.Database.EnsureCreatedAsync();
-     // await context.Database.MigrateAsync();
+      await context.Database.MigrateAsync();
     
 
     if (!await context.Tags.AnyAsync())
@@ -169,22 +169,22 @@ static string GetActiveConnectionString(IConfiguration configuration)
     var vpsConnectionString = configuration.GetConnectionString("NpgsqlConnectionVPS");
     var localConnectionString = configuration.GetConnectionString("NpgsqlConnectionLocal");
 
-    // if (!string.IsNullOrEmpty(vpsConnectionString))
-    // {
-    //     try
-    //     {
-    //      
-    //         using var testConnection = new NpgsqlConnection(vpsConnectionString);
-    //         testConnection.Open();
-    //         
-    //         Console.WriteLine($"[DB] Выбрана база VPS: {testConnection.Host}");
-    //         return vpsConnectionString;
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         Console.WriteLine($"[DB] VPS недоступен ({ex.Message}). Переключаемся на localhost...");
-    //     }
-    // }
+     if (!string.IsNullOrEmpty(vpsConnectionString))
+     {
+         try
+        {
+          
+             using var testConnection = new NpgsqlConnection(vpsConnectionString);
+             testConnection.Open();
+             
+             Console.WriteLine($"[DB] Выбрана база VPS: {testConnection.Host}");
+             return vpsConnectionString;
+         }
+         catch (Exception ex)
+         {
+             Console.WriteLine($"[DB] VPS недоступен ({ex.Message}). Переключаемся на localhost...");
+         }
+     }
 
     if (string.IsNullOrEmpty(localConnectionString))
     {
