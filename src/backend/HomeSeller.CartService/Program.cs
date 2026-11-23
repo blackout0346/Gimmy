@@ -47,7 +47,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-var redisHost = builder.Configuration["Redis:HostLocal"] ?? "localhost";
+var redisHost = builder.Configuration["Redis:Host"] ?? "localhost";
 var redisPort = builder.Configuration["Redis:Port"] ?? "6379";
 var redispassword = builder.Configuration["Redis:Password"];
 var configOptions = new ConfigurationOptions
