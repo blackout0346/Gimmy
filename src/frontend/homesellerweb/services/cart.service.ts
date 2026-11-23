@@ -1,5 +1,5 @@
 import { ApiError, apiFetch } from '@/lib/http';
-import { CartRequest, CartResponse } from '../DTOs/cart/route';
+import { CartRequest, CartResponse } from '@/dtos/cart/cart.dto';
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_CART_API_URL}/api/Cart`;
 

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import * as signalR from '@microsoft/signalr';
-import { NotificationDto } from '../api/DTOs/Notification/route';
+import { NotificationDto } from '@/dtos/notification/notification.dto';
 import { tokenStorage } from '@/lib/http';
 
 interface NotificationContextValue {

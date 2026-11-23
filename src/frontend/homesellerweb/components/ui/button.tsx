@@ -76,7 +76,7 @@ function Button({
     >
       {loading ? (
         <>
-          <span className="inline-flex items-center gap-[inherit] opacity=0">
+          <span className="inline-flex items-center gap-[inherit] opacity-0">
             {children}
           </span>
           <LoaderCircle aria-hidden="true" className="absolute animate-spin motion-reduce:animate-none"/>

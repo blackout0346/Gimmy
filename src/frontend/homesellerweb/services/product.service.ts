@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/http';
-import { ProductsRequest, ProductsResponse } from '../DTOs/product/route';
+import { ProductsRequest, ProductsResponse } from '@/dtos/product/product.dto';
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_PRODUCT_API_URL}/api/Product`;
 

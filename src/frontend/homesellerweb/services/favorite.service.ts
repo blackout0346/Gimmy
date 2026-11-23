@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/http';
-import { FavoriteResponse } from '@/app/api/DTOs/cart/route';
+import { FavoriteResponse } from '@/dtos/cart/cart.dto';
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_CART_API_URL}/api/Cart/favorites`;
 

@@ -17,8 +17,8 @@ import {
   GetOrCreateChatRequest,
   MessageResponse,
   SendMessageRequest,
-} from '@/app/api/DTOs/messenger/route';
-import { messengerService } from '@/app/api/Services/messenger.service';
+} from '@/dtos/messenger/messenger.dto';
+import { messengerService } from '@/services/messenger.service';
 
 const MESSENGER_API_URL =
   process.env.NEXT_PUBLIC_MESSENGER_API_URL || 'http://localhost:5214';
