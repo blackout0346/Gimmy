@@ -1,5 +1,3 @@
-
-
 export interface ProductsRequest {
   nameProduct: string;
   description: string;
