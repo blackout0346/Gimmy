@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Onest } from "next/font/google";
 import "./globals.css";
-import { NotificationProvider } from '../app/provider/NotificationProvider';
+import { NotificationProvider } from '@/providers/NotificationProvider';
 const onest = Onest({
   variable: "--font-onest",
   subsets: ["latin", "cyrillic"],

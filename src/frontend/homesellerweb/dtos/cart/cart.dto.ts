@@ -1,5 +1,3 @@
-
-
 export interface CartItemResponse {
   id: string;
   productId: string;
