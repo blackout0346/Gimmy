@@ -72,6 +72,7 @@ public class ProductController : ControllerBase
             return Ok(uploadedurls);
         }catch(Exception ex)
         {
+         
             return BadRequest(ex.Message);
         }
         

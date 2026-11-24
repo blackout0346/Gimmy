@@ -13,10 +13,18 @@
       <PackageReference Include="MassTransit.AspNetCore" Version="7.3.1" />
       <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.12" />
       <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15">
+        <PrivateAssets>all</PrivateAssets>
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      </PackageReference>
       <PackageReference Include="Microsoft.OpenApi" Version="3.11.1" />
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
       <PackageReference Include="StackExchange.Redis" Version="4.0.165-alpha" />
       <PackageReference Include="Swashbuckle.AspNetCore" Version="11.0.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\HomeSeller.Shared\HomeSeller.Shared.csproj" />
     </ItemGroup>
   <Target Name="RemoveOpenApiSourceGenerator" BeforeTargets="CoreCompile">
       <ItemGroup>
