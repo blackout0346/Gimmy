@@ -17,6 +17,7 @@ export interface ProfileRequest{
 export interface ProfileResponse{
     id:string;
     userId:string;
+    name:string;
     description?:string | null;
     phoneNumber?:string | null;
     imageURLs?:ProfileImageItem[] | null;

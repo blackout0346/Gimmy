@@ -31,7 +31,7 @@ export const profileService = {
     async getMyProfile(): Promise<ProfileResponse | null>{
         try{
         
-            return apiFetch<ProfileResponse>(`${BASE_URL}/me`, {
+            return await apiFetch<ProfileResponse>(`${BASE_URL}/me`, {
                 method: "GET",
                 auth:true
             })
