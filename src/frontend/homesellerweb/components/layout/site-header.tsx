@@ -1,0 +1,44 @@
+import Link from "next/link"
+import type { ReactNode } from "react"
+import { Heart, MessageCircle, Plus, UserRound } from "lucide-react"
+import { buttonVariants } from "@/components/ui/button"
+import { routes } from "@/lib/routes"
+
+type SiteHeaderProps = {
+  authenticated: boolean
+  search?: ReactNode
+  categoryNavigation?: ReactNode
+}
+
+export function SiteHeader({ authenticated, search, categoryNavigation }: SiteHeaderProps) {
+  return (
+    <header className="border-b border-border bg-card">
+      <div className="mx-auto grid w-full max-w-[1328px] grid-cols-[1fr_auto] items-center gap-x-4 px-4 md:flex md:h-16 md:gap-3 md:px-6 min-[1200px]:h-[72px] min-[1200px]:gap-6">
+        <Link href={routes.home} className="flex h-[60px] shrink-0 items-center text-lg/7 font-bold text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:text-xl/7">
+          Gimmy<span className="text-primary">.</span>
+        </Link>
+        <div className="col-start-2 row-start-1 md:hidden">
+          <Link href={authenticated ? routes.profile : routes.login} prefetch={false} className={buttonVariants({ variant: "secondary", size: "sm" })}>
+            {authenticated ? "Профиль" : "Войти"}
+          </Link>
+        </div>
+        {search && <div className="col-span-2 mb-3 min-w-0 md:mb-0 md:flex-1">{search}</div>}
+        <nav aria-label="Действия пользователя" className="hidden shrink-0 items-center gap-1 md:flex min-[1200px]:gap-2">
+          <Link href={routes.favorites} prefetch={false} aria-label="Избранное" className={buttonVariants({ variant: "ghost", size: "icon" })}><Heart aria-hidden="true" /></Link>
+          <Link href={routes.messages} prefetch={false} aria-label="Сообщения" className={buttonVariants({ variant: "ghost", size: "icon" })}><MessageCircle aria-hidden="true" /></Link>
+          {authenticated ? (
+            <Link href={routes.profile} prefetch={false} aria-label="Профиль" className={buttonVariants({ variant: "ghost", size: "icon" })}><UserRound aria-hidden="true" /></Link>
+          ) : (
+            <Link href={routes.login} prefetch={false} className={buttonVariants({ variant: "secondary", size: "sm" })}>Войти</Link>
+          )}
+          <Link href={routes.create} prefetch={false} className={buttonVariants()}>
+            <Plus aria-hidden="true" />
+            <span className="min-[1200px]:hidden">Подать</span>
+            <span className="hidden min-[1200px]:inline">Подать объявление</span>
+          </Link>
+        </nav>
+      </div>
+      {categoryNavigation && <div className="border-t border-border">{categoryNavigation}</div>}
+    </header>
+  )
+}
