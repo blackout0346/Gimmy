@@ -5,7 +5,7 @@ import {
   LoginResponse,
   RegisterRequest,
   RegisterResponse,
-} from '../DTOs/auth/route';
+} from '@/dtos/auth/auth.dto';
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_AUTH_API_URL}/api/auth`;
 

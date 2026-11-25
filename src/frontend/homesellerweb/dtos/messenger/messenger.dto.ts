@@ -1,5 +1,3 @@
-
-
 export interface AttachmentRequest {
   fileName: string;
   fileUrl: string;

@@ -1,5 +1,3 @@
-
-
 export interface CartItemResponse {
   id: string;
   productId: string;
@@ -16,7 +14,8 @@ export interface CartResponse {
   userId: string;
   cartItems: CartItemResponse[];
 }
-  export interface FavoriteResponse{
+  
+export interface FavoriteResponse{
     userId: string;
     productIds: string[];
-  }
+}

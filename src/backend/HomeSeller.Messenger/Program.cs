@@ -74,7 +74,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-var redisHost = builder.Configuration["Redis:HostLocal"] ?? "localhost";
+var redisHost = builder.Configuration["Redis:Host"] ?? "localhost";
 var redisPort = builder.Configuration["Redis:Port"] ?? "6379";
 var redispassword = builder.Configuration["Redis:Password"];
 var configOptions = new ConfigurationOptions
@@ -89,7 +89,7 @@ builder.Services.AddMassTransit(x =>
 {
     x.UsingRabbitMq((context, cfg) =>
     {
-        var host = builder.Configuration["RabbitMQ:HostNameLocal"] ?? "localhost";
+        var host = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
         cfg.Host(host, "/", h =>
             {
                 h.Username(builder.Configuration["RabbitMQ:Username"] ?? "guest");

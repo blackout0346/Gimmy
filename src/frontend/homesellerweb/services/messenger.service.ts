@@ -6,7 +6,7 @@ import {
   GetChatHistoryRequest,
   GetOrCreateChatRequest,
   MessageResponse,
-} from '@/app/api/DTOs/messenger/route'; 
+} from '@/dtos/messenger/messenger.dto'; 
 
 const MESSENGER_API_URL =
   process.env.NEXT_PUBLIC_MESSENGER_API_URL || 'http://localhost:5214';

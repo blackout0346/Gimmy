@@ -2,15 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import * as signalR from '@microsoft/signalr';
-import { authService } from './api/Services/auth.service';
-import { productService } from './api/Services/product.service';
-import { cartService } from './api/Services/cart.service';
-import { favoriteService } from './api/Services/favorite.service';
-import { messengerService } from './api/Services/messenger.service';
-import { useNotifications } from './provider/NotificationProvider';
-import { useMessenger } from './provider/MessengerProvider';
-import { ProductsResponse } from './api/DTOs/product/route';
-import { CartResponse, FavoriteResponse } from './api/DTOs/cart/route';
+import { authService } from '@/services/auth.service';
+import { productService } from '@/services/product.service';
+import { cartService } from '@/services/cart.service';
+import { favoriteService } from '@/services/favorite.service';
+import { messengerService } from '@/services/messenger.service';
+import { useNotifications } from '@/providers/NotificationProvider';
+import { useMessenger } from '@/providers/MessengerProvider';
+import { ProductsResponse } from '@/dtos/product/product.dto';
+import { CartResponse, FavoriteResponse } from '@/dtos/cart/cart.dto';
 import { tokenStorage } from '@/lib/http';
 
 const MESSENGER_API_URL =
@@ -320,7 +320,7 @@ export function DashboardExample() {
       }
       const updatedCart = await cartService.getCart();
       setCart(updatedCart);
-      addSimLog(`Корзина обновлена (позиций: ${updatedCart.cartItems.length}).`);
+      addSimLog(`Корзина обновлена (позиций: ${updatedCart?.cartItems.length ?? 0}).`);
       await sleep(400);
 
       const itemsForFavorite = updatedProducts.slice(0, 2);
