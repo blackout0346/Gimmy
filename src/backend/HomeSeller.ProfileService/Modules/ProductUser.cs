@@ -7,4 +7,5 @@ public class ProductUser
     public UsersProfiles UsersProfiles { get; set; } = null!;
 
     public Guid ProductId { get; set; }
+    public bool isDeleted { get; set; } = false;
 }

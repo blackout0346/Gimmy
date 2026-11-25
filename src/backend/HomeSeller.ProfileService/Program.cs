@@ -1,21 +1,35 @@
 
 using System.Text;
 using System.Threading.RateLimiting;
+using HomeSeller.UserService.Interface;
 using HomeSeller.UserService.Modules;
+using HomeSeller.UserService.Service;
+using HomeSeller.UserService.Store;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Npgsql;
+using ProductService.ImagesServices;
 using StackExchange.Redis;
 
 DotNetEnv.Env.TraversePath().Load();
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddMemoryCache();
 builder.Services.AddControllers();
+string postgresConnect = GetActiveConnectionString(builder.Configuration);
 
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    options.UseNpgsql(postgresConnect);
+});
+
+builder.Services.AddSingleton<ImagesSystem>();
+builder.Services.AddScoped<IProfileStore, ProfileStore>();
+builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo { Title = "HomeSeller API", Version = "v1" });
@@ -55,26 +69,22 @@ var configOptions = new ConfigurationOptions
     Password = redisPassword,
     AbortOnConnectFail = false,
 };
-
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(configOptions));
 builder.Services.AddMassTransit(x =>
 {
     x.UsingRabbitMq((context, cfg) =>
     {
         var host = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
         cfg.Host(host, "/", h =>
-        {
-            h.Username(builder.Configuration["RabbitMQ:Username"] ?? "guest");
-            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
-        });
+            {
+                h.Username(builder.Configuration["RabbitMQ:Username"] ?? "guest");
+                h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
+            }
+        );
     });
 });
 
-string postgresConnect = GetActiveConnectionString(builder.Configuration);
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-{
-    options.UseNpgsql(postgresConnect);
-});
 
 
 builder.Services.AddRateLimiter(options =>
@@ -113,18 +123,27 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+var imageStorePath = Path.Combine(app.Environment.ContentRootPath, "ProfileAttachment");
+Directory.CreateDirectory(imageStorePath);
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(imageStorePath),
+    RequestPath = "/ProfileAttachment"
+});
+
 app.UseCors("FrontendCorsPolicy");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// using (var scope = app.Services.CreateScope())
-// {
-//     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-//
-//     await context.Database.MigrateAsync();
-// }
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await context.Database.MigrateAsync();
+}
+
 app.MapGet("/", () => "Hello World!");
 
 app.Run();

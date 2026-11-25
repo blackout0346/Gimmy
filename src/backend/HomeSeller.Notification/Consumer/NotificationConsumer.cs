@@ -3,6 +3,7 @@ using HomeSeller.Notification.Models;
 using HomeSeller.Notification.Services;
 using HomeSeller.Shared.EventMessenger;
 using HomeSeller.Shared.EventProduct;
+using HomeSeller.Shared.EventProfle;
 using HomeSeller.Shared.EventUser;
 using MassTransit;
 using Microsoft.AspNetCore.SignalR;
@@ -17,7 +18,8 @@ public class NotificationConsumer :
     IConsumer<UserChangePasswordEvent>,
     IConsumer<UserDeletedEvent>,
     IConsumer<MessageSentEvent>,
-    IConsumer<ChatCreatedEvent>
+    IConsumer<ChatCreatedEvent>,
+    IConsumer<ProfileUpdateEvent>
 {
     private readonly IHubContext<NotificationHub, INotificationClient> _hubContext;
     private readonly ILogger<NotificationConsumer> _logger;
@@ -162,11 +164,25 @@ public class NotificationConsumer :
             CreatedAt: msg.CreatedAt
         ));
     }
+    public async Task Consume(ConsumeContext<ProfileUpdateEvent> context)
+    {
+        var msg = context.Message;
+        var initiator = string.IsNullOrWhiteSpace(msg.name) ? "Пользователь" : msg.name;
+
+        await SendToUserAsync(msg.UserId, new NotificationDto(
+            Type: nameof(ProfileUpdateEvent),
+            Title: "Профиль обновлён",
+            Message: $"{initiator}, данные вашего профиля успешно обновлены.",
+            EntityId: msg.UserId,
+            CreatedAt: msg.updatedAt
+        ));
+    }
     private async Task SendToUserAsync(Guid userId, NotificationDto notification)
     {
         _logger.LogInformation($"Отправка уведомления {notification.Type} пользователю: {userId}",notification.Type, userId);
         await _hubContext.Clients.User(userId.ToString()).ReceiveNotification(notification);
     }
 
- 
+
+  
 }
