@@ -1,4 +1,6 @@
-const TOKEN_KEY = 'homeseller_access_token';
+export const AUTH_CHANGE_EVENT = 'gimmy:auth-change';
+
+const TOKEN_KEY = 'gimmy:access_token';
 
 export const tokenStorage = {
   get: (): string | null => {
@@ -8,11 +10,13 @@ export const tokenStorage = {
   set: (token: string): void => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(TOKEN_KEY, token);
+      window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
     }
   },
   clear: (): void => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(TOKEN_KEY);
+      window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
     }
   },
 };

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Onest } from "next/font/google";
 import "./globals.css";
-import { NotificationProvider } from '@/providers/NotificationProvider';
+import { AppProviders } from '@/providers/AppProviders';
 const onest = Onest({
   variable: "--font-onest",
   subsets: ["latin", "cyrillic"],
@@ -13,8 +13,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gimmy",
-  description: "Description",
+  title: {
+    template: '%s | Gimmy',
+    default: 'Gimmy',
+  },
+  description: "Description"
 };
 
 export default function RootLayout({
@@ -28,7 +31,7 @@ export default function RootLayout({
       className={`${onest.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <NotificationProvider>{children}</NotificationProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

@@ -7,7 +7,7 @@ import {
 const BASE_URL = `${process.env.NEXT_PUBLIC_PROFILE_API_URL}/api/Profile`;
 
 export const profileService = {
-    async getProfile(search?: string): Promise<ProfileResponse[]>{
+    async getProfile(): Promise<ProfileResponse[]>{
         return apiFetch<ProfileResponse[]>(BASE_URL, {
             method: 'GET',
             auth:false
