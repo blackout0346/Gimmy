@@ -85,7 +85,9 @@ public class ProductController : ControllerBase
     [HttpGet("GetProducts")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(IEnumerable<ProductsResponse>), 200)]
-    public async Task<IActionResult> GetAllProducts([FromQuery] string? search = null)
+    public async Task<IActionResult> GetAllProducts([FromQuery] string? search = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         if (!ModelState.IsValid)
         {
@@ -94,7 +96,7 @@ public class ProductController : ControllerBase
 
         try
         {
-            var result = await _productService.GetProductsAsync(search);
+            var result = await _productService.GetProductsAsync(search, page, pageSize);
             return Ok(result);
         }
         catch (Exception ex)

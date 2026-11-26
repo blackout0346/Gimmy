@@ -4,12 +4,27 @@ import { ProductsRequest, ProductsResponse } from '@/dtos/product/product.dto';
 const BASE_URL = `${process.env.NEXT_PUBLIC_PRODUCT_API_URL}/api/Product`;
 
 export const productService = {
-  async getProducts(search?: string): Promise<ProductsResponse[]> {
-    const query = search ? `?search=${encodeURIComponent(search)}` : '';
-    return apiFetch<ProductsResponse[]>(`${BASE_URL}/GetProducts${query}`, {
-      method: 'GET',
-      auth: false,
+  async getProducts(
+    search?: string,
+    page = 1,
+    pageSize = 20
+  ): Promise<ProductsResponse[]> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      pageSize: pageSize.toString(),
     });
+
+    if (search?.trim()) {
+      params.append('search', search.trim());
+    }
+
+    return apiFetch<ProductsResponse[]>(
+      `${BASE_URL}/GetProducts?${params.toString()}`,
+      {
+        method: 'GET',
+        auth: false,
+      }
+    );
   },
 
   async getProductById(productId: string): Promise<ProductsResponse> {

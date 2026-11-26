@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using DotNetEnv;
+using HomeSeller.ProductService.Modules;
 using HomeSeller.ProductService.StoreService;
 using HomeSeller.Shared.EventProfile;
 using HomeSellerServer.Interface;
@@ -133,22 +134,70 @@ using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ProductDbContext>();
 
-    // await context.Database.EnsureDeletedAsync();
-    // await context.Database.EnsureCreatedAsync();
-      await context.Database.MigrateAsync();
-    
+    await context.Database.MigrateAsync();
 
-    if (!await context.Tags.AnyAsync())
+    var filePath = Path.Combine(AppContext.BaseDirectory, "initData.json");
+    if (File.Exists(filePath))
     {
-        var filePath = Path.Combine(AppContext.BaseDirectory, "initData.json");
-        if (File.Exists(filePath))
-        {
-            var json = await File.ReadAllTextAsync(filePath);
-            var tags = JsonSerializer.Deserialize<List<Tags>>(json);
+        var json = await File.ReadAllTextAsync(filePath);
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var initData = JsonSerializer.Deserialize<InitDataDto>(json, options);
 
-            if (tags != null && tags.Count > 0)
+        if (initData != null)
+        {
+            // 1. Сначала сохраняем теги (включая вложенные SubTags)
+            if (!await context.Tags.AnyAsync() && initData.Tags.Count > 0)
             {
-                await context.Tags.AddRangeAsync(tags);
+                await context.Tags.AddRangeAsync(initData.Tags);
+                await context.SaveChangesAsync();
+            }
+
+            // 2. Затем товары, картинки, связи с тегами и отзывы
+            if (!await context.Products.AnyAsync() && initData.Products.Count > 0)
+            {
+                var allTags = await context.Tags.AsNoTracking().ToListAsync();
+                var tagIdByName = allTags
+                    .GroupBy(t => t.NameTag)
+                    .ToDictionary(g => g.Key, g => g.First().Id);
+
+                await context.Products.AddRangeAsync(initData.Products);
+                await context.SaveChangesAsync();
+
+                if (initData.ProductImages.Count > 0)
+                {
+                    await context.ProductImage.AddRangeAsync(initData.ProductImages);
+                }
+
+                var validProductTags = new List<ProductTag>();
+                foreach (var pt in initData.ProductTags)
+                {
+                    if (!string.IsNullOrEmpty(pt.TagName) && tagIdByName.TryGetValue(pt.TagName, out var realTagId))
+                    {
+                        validProductTags.Add(new ProductTag
+                        {
+                            Id = pt.Id,
+                            ProductId = pt.ProductId,
+                            TagId = realTagId
+                        });
+                    }
+                }
+
+                if (validProductTags.Count > 0)
+                {
+                    await context.ProductTags.AddRangeAsync(validProductTags);
+                }
+
+                if (initData.RateProductItems.Count > 0)
+                {
+                    await context.RateProductItem.AddRangeAsync(initData.RateProductItems);
+                    await context.SaveChangesAsync();
+                }
+
+                if (initData.RateProductImages.Count > 0)
+                {
+                    await context.RateProductImage.AddRangeAsync(initData.RateProductImages);
+                }
+
                 await context.SaveChangesAsync();
             }
         }
@@ -196,4 +245,22 @@ static string GetActiveConnectionString(IConfiguration configuration)
 
     Console.WriteLine("[DB] Выбрана локальная база данных (localhost)");
     return localConnectionString;
+}
+
+file class InitDataDto
+{
+    public List<Tags> Tags { get; set; } = new();
+    public List<Products> Products { get; set; } = new();
+    public List<ProductImage> ProductImages { get; set; } = new();
+    public List<ProductTagSeedDto> ProductTags { get; set; } = new();
+    public List<RateProductItem> RateProductItems { get; set; } = new();
+    public List<RateProductImage> RateProductImages { get; set; } = new();
+}
+
+file class ProductTagSeedDto
+{
+    public Guid Id { get; set; }
+    public Guid ProductId { get; set; }
+    public Guid TagId { get; set; }
+    public string TagName { get; set; } = string.Empty;
 }

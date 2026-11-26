@@ -26,7 +26,14 @@ public class ProductService : IProductService
     private readonly TimeSpan? _cacheExpiry = TimeSpan.FromHours(1);
     private readonly ImagesSystem _imagesSystem;
 
-    public ProductService(ImagesSystem imagesSystem,IRequestClient<GetUserNameRequest> userNameClient, IProductStore productStore, IPublishEndpoint publishEndpoint, ILogger<ProductService> logger,
+    private const string ProductsVersionKey = "products:list:version";
+
+    public ProductService(
+        ImagesSystem imagesSystem,
+        IRequestClient<GetUserNameRequest> userNameClient,
+        IProductStore productStore,
+        IPublishEndpoint publishEndpoint,
+        ILogger<ProductService> logger,
         IConnectionMultiplexer muxer)
     {
         _userNameClient = userNameClient;
@@ -37,41 +44,50 @@ public class ProductService : IProductService
         _productStore = productStore;
     }
 
-
-    public async Task<IEnumerable<ProductsResponse>> GetProductsAsync(string? search = null)
+    public async Task<IEnumerable<ProductsResponse>> GetProductsAsync(
+        string? search = null,
+        int page = 1,
+        int pageSize = 20)
     {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+        var version = await CacheHelper.GetVersionAsync(_redis, _logger, ProductsVersionKey);
         var isSearch = !string.IsNullOrWhiteSpace(search);
-        var cacheKey = isSearch 
-            ? $"products:search:{search!.Trim().ToLowerInvariant()}" 
-            : "products:All";
-
-
+        var cacheKey = isSearch
+            ? $"products:v{version}:search:{search!.Trim().ToLowerInvariant()}:p{page}:s{pageSize}"
+            : $"products:v{version}:All:p{page}:s{pageSize}";
 
         var cachedProducts = await CacheHelper.GetCacheAsync<IEnumerable<ProductsResponse>>(_redis, _logger, cacheKey);
         if (cachedProducts != null)
         {
-     
-            _logger.LogInformation($"get cache: {cacheKey}");
+            _logger.LogInformation("get cache: {CacheKey}", cacheKey);
             return cachedProducts;
         }
 
-        var products = (await _productStore.GetProducts(search)).ToList();
+        var products = (await _productStore.GetProducts(search, page, pageSize)).ToList();
+
+        if (products.Count == 0)
+        {
+            return Enumerable.Empty<ProductsResponse>();
+        }
+
         var ratingsMap = await _productStore.GetProductsRatingStateAsync(products.Select(p => p.Id));
-        var productsResponse = products.Select(p=> MapToResponse(p, ratingsMap.GetValueOrDefault(p.Id))).ToList();
+        var productsResponse = products
+            .Select(p => MapToResponse(p, ratingsMap.GetValueOrDefault(p.Id)))
+            .ToList();
 
         await CacheHelper.SetCacheAsync(
-            _redis, 
-            _logger, 
-            productsResponse, 
-            cacheKey, 
+            _redis,
+            _logger,
+            productsResponse,
+            cacheKey,
             isSearch ? TimeSpan.FromMinutes(5) : _cacheExpiry);
 
-    
-        _logger.LogInformation($"get no cache { cacheKey}" );
+        _logger.LogInformation("get no cache: {CacheKey}", cacheKey);
 
         return productsResponse;
     }
-
 
     public async Task<ProductsResponse?> GetProductByIdAsync(Guid id)
     {
@@ -130,16 +146,14 @@ public class ProductService : IProductService
                 TagId = tagId
             }).ToList() ?? new List<ProductTag>()
         };
-        
-            
-        
-        await _productStore.ProductsAddAsync( product);
-        await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:All");
+
+        await _productStore.ProductsAddAsync(product);
+        await CacheHelper.IncrementVersionAsync(_redis, _logger, ProductsVersionKey);
+
         await _publishEndpoint.Publish(new ProductCreatedEvent()
         {
             ProductId = newProductId,
             productName = request.NameProduct,
-
             CreateAt = DateTime.UtcNow,
         });
 
@@ -147,75 +161,74 @@ public class ProductService : IProductService
         return MapToResponse(createdProduct ?? product);
     }
 
-public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid productid, ProductsRequest request)
-{
-    var existing = await _productStore.GetProductsIdAsync(productid);
-    if (existing == null || existing.UserId != userId)
+    public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid productid, ProductsRequest request)
     {
-        return null;
-    }
+        var existing = await _productStore.GetProductsIdAsync(productid);
+        if (existing == null || existing.UserId != userId)
+        {
+            return null;
+        }
 
-    var productToUpdate = new Products
-    {
-        Id = productid,
-        NameProduct = request.NameProduct,
-        Description = request.Description,
-        Price = request.Price,
-        SellerLogin = existing.SellerLogin,
-        ConditionId = request.ConditionId,
-        UserId = existing.UserId,
-        Position = request.Position,
-        ImageURLs = request.ImageURLs?
-            .Where(img => !string.IsNullOrWhiteSpace(img))
-            .Select(img => new ProductImage
+        var productToUpdate = new Products
+        {
+            Id = productid,
+            NameProduct = request.NameProduct,
+            Description = request.Description,
+            Price = request.Price,
+            SellerLogin = existing.SellerLogin,
+            ConditionId = request.ConditionId,
+            UserId = existing.UserId,
+            Position = request.Position,
+            ImageURLs = request.ImageURLs?
+                .Where(img => !string.IsNullOrWhiteSpace(img))
+                .Select(img => new ProductImage
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = productid,
+                    ImageURL = img.Trim()
+                }).ToList() ?? new List<ProductImage>(),
+
+            ProductTags = request.TagIds?.Select(tagId => new ProductTag
             {
                 Id = Guid.NewGuid(),
                 ProductId = productid,
-                ImageURL = img.Trim()
-            }).ToList() ?? new List<ProductImage>(),
+                TagId = tagId
+            }).ToList() ?? new List<ProductTag>()
+        };
 
-        ProductTags = request.TagIds?.Select(tagId => new ProductTag
+        var newUrls = productToUpdate.ImageURLs
+            .Select(i => i.ImageURL)
+            .ToHashSet();
+
+        var removedUrls = existing.ImageURLs?
+            .Where(old => !newUrls.Contains(old.ImageURL))
+            .Select(old => old.ImageURL)
+            .ToList() ?? new List<string>();
+
+        await _productStore.ProductsUpdateAsync(userId, productToUpdate);
+        if (removedUrls.Count > 0)
         {
-            Id = Guid.NewGuid(),
+            _imagesSystem.DeleteImages(removedUrls);
+        }
+
+        await _publishEndpoint.Publish(new ProductUpdatedEvent
+        {
             ProductId = productid,
-            TagId = tagId
-        }).ToList() ?? new List<ProductTag>()
-    };
+            productName = request.NameProduct,
+            UpdateAt = DateTime.UtcNow,
+        });
 
-    var newUrls = productToUpdate.ImageURLs
-        .Select(i => i.ImageURL)
-        .ToHashSet();
+        await CacheHelper.IncrementVersionAsync(_redis, _logger, ProductsVersionKey);
+        await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"products:id{productid}");
 
-    var removedUrls = existing.ImageURLs?
-        .Where(old => !newUrls.Contains(old.ImageURL))
-        .Select(old => old.ImageURL)
-        .ToList() ?? new List<string>();
-
-
-
-    await _productStore.ProductsUpdateAsync(userId, productToUpdate);
-    if (removedUrls.Count > 0)
-    {
-        _imagesSystem.DeleteImages(removedUrls);
+        var updatedProduct = await _productStore.GetProductsIdAsync(productid);
+        if (updatedProduct == null)
+        {
+            return null;
+        }
+        var rating = await _productStore.GetProductRatingStateAsync(productid);
+        return MapToResponse(updatedProduct, rating);
     }
-    await _publishEndpoint.Publish(new ProductUpdatedEvent
-    {
-        ProductId = productid,
-        productName = request.NameProduct,
-        UpdateAt = DateTime.UtcNow,
-    });
-
-    await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:All");
-    await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"products:id{productid}");
-
-    var updatedProduct = await _productStore.GetProductsIdAsync(productid);
-    if (updatedProduct == null)
-    {
-        return null;
-    }
-    var rating = await _productStore.GetProductRatingStateAsync(productid);
-    return MapToResponse(updatedProduct, rating);
-}
 
     public async Task<bool> DeleteProductsAsync(Guid userId, Guid productid)
     {
@@ -224,7 +237,7 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
         {
             return false;
         }
-        var deleted= await _productStore.DeleteProductAsync( productid);
+        var deleted = await _productStore.DeleteProductAsync(productid);
         if (!deleted)
         {
             return false;
@@ -237,7 +250,7 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
             DeleteAt = DateTime.UtcNow,
         });
 
-        await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:All");
+        await CacheHelper.IncrementVersionAsync(_redis, _logger, ProductsVersionKey);
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"products:id{productid}");
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"rates:product:{productid}");
         return true;
@@ -270,7 +283,7 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
 
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"rates:product:{existing.ProductId}");
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"products:id{existing.ProductId}");
-        await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:All");
+        await CacheHelper.IncrementVersionAsync(_redis, _logger, ProductsVersionKey);
 
         return true;
     }
@@ -302,7 +315,7 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
             Username = username,
             ProductId = request.ProductId,
             UserId = userId,
-            Rate =  request.Rate,
+            Rate = request.Rate,
             DescriptionRate = request.DescriptionRate?.Trim() ?? string.Empty,
             IsDeleted = false,
             RateProductImages = request.ImageURLs?
@@ -328,7 +341,7 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
         });
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"rates:product:{request.ProductId}");
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"products:id{request.ProductId}");
-        await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:All");
+        await CacheHelper.IncrementVersionAsync(_redis, _logger, ProductsVersionKey);
 
         return MapToRateResponse(item);
     }
@@ -350,20 +363,17 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
                 ImageURL = img.Trim()
             }).ToList() ?? new List<RateProductImage>();
 
-   
         var newUrls = updateImages.Select(i => i.ImageURL).ToHashSet();
         var removedUrls = currentRate.RateProductImages
             .Where(old => !newUrls.Contains(old.ImageURL))
             .Select(old => old.ImageURL)
             .ToList();
 
-     
-
         var itemUpdate = new RateProductItem
         {
             Id = rateId,
             UserId = userId,
-            Rate =  request.Rate,
+            Rate = request.Rate,
             Username = currentRate.Username,
             ProductId = currentRate.ProductId,
             DescriptionRate = request.DescriptionRate?.Trim() ?? string.Empty,
@@ -377,7 +387,8 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
         }
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"rates:product:{currentRate.ProductId}");
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"products:id{currentRate.ProductId}");
-        await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:All");
+        await CacheHelper.IncrementVersionAsync(_redis, _logger, ProductsVersionKey);
+
         itemUpdate.CreatedAt = currentRate.CreatedAt;
         itemUpdate.UpdatedAt = DateTime.UtcNow;
 
@@ -422,7 +433,6 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
         }).ToList();
     }
 
-
     private static ProductsResponse MapToResponse(
         Products products,
         (double averageRating, int ratingCount) rating = default) => new()
@@ -444,6 +454,7 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
             .Select(pt => pt.Tag.NameTag)
             .ToList() ?? new List<string>()
     };
+
     private static RateResponse MapToRateResponse(RateProductItem item)
     {
         return new RateResponse
@@ -454,7 +465,6 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
             UserName = item.Username,
             DescriptionRate = item.DescriptionRate,
             Rate = item.Rate,
-            
             CreateAt = item.CreatedAt,
             UpdateAt = item.UpdatedAt,
             ImageURLs = item.RateProductImages?
