@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import type { ConditionResponse, ProductsRequest, TagResponse } from "@/dtos/product/product.dto"
 import { productService } from "@/services/product.service"
+import { attachProductToProfile } from "@/services/profile-products"
 import { ApiError } from "@/lib/http"
 import { readSession, type Session } from "@/lib/session"
 import { routes } from "@/lib/routes"
@@ -218,6 +219,14 @@ export function ProductForm() {
       }
       completed = true
       setCreatedId(result.id)
+      setStage("Добавляем объявление в профиль…")
+      try {
+        await attachProductToProfile(result.id)
+      } catch {
+        if (mounted.current) setError("Объявление опубликовано, но добавить его в профиль не удалось. Откройте профиль, чтобы завершить этот шаг.")
+        return
+      }
+      if (!mounted.current) return
       router.push(routes.product(result.id))
     } catch (failure) {
       if (!mounted.current) return
@@ -316,7 +325,10 @@ export function ProductForm() {
               {stage && <p role="status" className="text-sm text-muted-foreground">{stage}</p>}
               <div className="flex flex-wrap justify-end gap-3">
                 {createdId ? (
-                  <Link href={routes.product(createdId)} className={buttonVariants()}>Открыть объявление</Link>
+                  <>
+                    <Link href={`${routes.profile}?productId=${encodeURIComponent(createdId)}`} className={buttonVariants({ variant: "secondary" })}>Открыть профиль</Link>
+                    <Link href={routes.product(createdId)} className={buttonVariants()}>Открыть объявление</Link>
+                  </>
                 ) : (
                   <Button type="submit" loading={pending} disabled={lookupLoading || !tags.length || !conditions.length}>Опубликовать</Button>
                 )}
