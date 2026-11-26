@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react"
 import { authService } from "@/services/auth.service"
 import { ApiError } from "@/lib/http"
 import { routes } from "@/lib/routes"
+import { authRedirect } from "@/lib/auth-redirect"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
@@ -22,11 +23,14 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
   const [registered, setRegistered] = useState(false)
+  const [returnTo, setReturnTo] = useState<string>(routes.home)
   const submitting = useRef(false)
   const errorRef = useRef<HTMLParagraphElement>(null)
 
   useEffect(() => {
-    setRegistered(!registering && new URLSearchParams(window.location.search).get("registered") === "1")
+    const params = new URLSearchParams(window.location.search)
+    setRegistered(!registering && params.get("registered") === "1")
+    setReturnTo(authRedirect(params.get("next")))
   }, [registering])
 
   useEffect(() => {
@@ -55,14 +59,14 @@ export function AuthForm({ mode }: AuthFormProps) {
         setError("Сервер не вернул данные для входа. Попробуйте ещё раз.")
         return
       }
-      router.replace(result.token ? routes.home : `${routes.login}?registered=1`)
+      router.replace(result.token ? returnTo : `${routes.login}?registered=1&next=${encodeURIComponent(returnTo)}`)
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 401 && !registering) {
         setError("Неверный логин или пароль.")
       } else if (failure instanceof ApiError && failure.status === 409 && registering) {
         setError("Этот логин уже занят. Выберите другой.")
       } else if (failure instanceof ApiError && failure.status === 400) {
-        setError("Проверьте логин и пароль. Сервер отклонил введённые данные.")
+        setError(failure.message || "Проверьте логин и пароль. Сервер отклонил введённые данные.")
       } else {
         setError(registering
           ? "Не удалось завершить регистрацию. Попробуйте ещё раз."
@@ -122,7 +126,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
           <p className="mt-6 text-center text-sm/5 text-muted-foreground">
             {registering ? "Уже есть аккаунт? " : "Нет аккаунта? "}
-            <Link href={registering ? routes.login : routes.register} className="rounded-sm font-medium text-primary hover:text-primary-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+            <Link href={`${registering ? routes.login : routes.register}${returnTo === routes.home ? "" : `?next=${encodeURIComponent(returnTo)}`}`} className="rounded-sm font-medium text-primary hover:text-primary-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               {registering ? "Войти" : "Зарегистрироваться"}
             </Link>
           </p>
