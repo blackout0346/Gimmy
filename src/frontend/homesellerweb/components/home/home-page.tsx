@@ -2,14 +2,14 @@
 
 import Link from "next/link"
 import { useEffect, useRef, useState, type FormEvent } from "react"
-import type { ProductsResponse } from "@/dtos/product/product.dto"
+import type { ProductsResponse, TagResponse } from "@/dtos/product/product.dto"
 import { tokenStorage, ApiError } from "@/lib/http"
 import { productService } from "@/services/product.service"
 import { favoriteService } from "@/services/favorite.service"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { CategoryNavigation } from "@/components/layout/category-navigation"
 import { ProductCard, ProductCardSkeleton } from "./product-card"
-import { productCategories, productTimestamp } from "./product-display"
+import { productTimestamp } from "./product-display"
 import { routes } from "@/lib/routes"
 import { SiteHeader } from "@/components/layout/site-header"
 import { SiteFooter } from "@/components/layout/site-footer"
@@ -26,6 +26,10 @@ export function HomePage() {
   const [draft, setDraft] = useState("")
   const [query, setQuery] = useState("")
   const [category, setCategory] = useState("")
+  const [tags, setTags] = useState<TagResponse[]>([])
+  const [tagsReady, setTagsReady] = useState(false)
+  const [tagsError, setTagsError] = useState(false)
+  const [tagsRetry, setTagsRetry] = useState(0)
   const [urlReady, setUrlReady] = useState(false)
   const [token, setToken] = useState<string | null>(null)
   const [favoriteIds, setFavoriteIds] = useState<string[]>([])
@@ -76,17 +80,42 @@ export function HomePage() {
   }, [])
 
   useEffect(() => {
-    if (!urlReady) return
     let cancelled = false
+    setTagsReady(false)
+    setTagsError(false)
+    productService.getTags()
+      .then((result) => {
+        if (!cancelled) {
+          setTags(result)
+          setTagsReady(true)
+        }
+      })
+      .catch(() => { if (!cancelled) setTagsError(true) })
+    return () => { cancelled = true }
+  }, [tagsRetry])
+
+  const selectedTagIds = tags
+    .filter((tag) => tag.name?.trim() === category)
+    .map((tag) => tag.id)
+    .sort()
+  const selectedTagIdsKey = selectedTagIds.join(",")
+  const categoryPending = Boolean(category && !tagsReady && !tagsError)
+
+  useEffect(() => {
+    if (!urlReady) return
     setLoading(true)
     setLoadError(false)
+    if (categoryPending) return
+    let cancelled = false
 
     async function load() {
       try {
         if (!process.env.NEXT_PUBLIC_PRODUCT_API_URL) throw new Error("Product API URL is missing")
-        const result = await productService.getProducts(
-          query ? { search: query } : undefined
-        )
+        const result = await productService.getProducts({
+          search: query || undefined,
+          tagIds: selectedTagIdsKey ? selectedTagIdsKey.split(",") : undefined,
+          sortBy: "newest",
+        })
         if (!cancelled) setProducts([...result].sort((a, b) => productTimestamp(b) - productTimestamp(a)))
       } catch {
         if (!cancelled) setLoadError(true)
@@ -97,7 +126,7 @@ export function HomePage() {
 
     void load()
     return () => { cancelled = true }
-  }, [query, retry, urlReady])
+  }, [query, category, categoryPending, selectedTagIdsKey, retry, urlReady])
 
   useEffect(() => {
     let cancelled = false
@@ -189,9 +218,10 @@ export function HomePage() {
     }
   }
 
-  const categories = productCategories(products)
+  const categories = [...new Set(tags.map((tag) => tag.name?.trim()).filter((name): name is string => Boolean(name)))]
+    .sort((a, b) => a.localeCompare(b, "ru"))
   if (category && !categories.includes(category)) categories.unshift(category)
-  const visibleProducts = category
+  const visibleProducts = category && !selectedTagIdsKey
     ? products.filter((product) => product.tags?.some((tag) => tag.trim() === category))
     : products
 
@@ -203,6 +233,9 @@ export function HomePage() {
         categoryNavigation={
           <CategoryNavigation
             categories={categories}
+            loading={!tagsReady && !tagsError}
+            error={tagsError}
+            onRetry={() => setTagsRetry((value) => value + 1)}
             value={category}
             onValueChange={(value) => updateLocation(query, value)}
           />
