@@ -1,6 +1,7 @@
 
 using System.Text;
 using System.Threading.RateLimiting;
+using HomeSeller.UserService.Consumer;
 using HomeSeller.UserService.Interface;
 using HomeSeller.UserService.Modules;
 using HomeSeller.UserService.Service;
@@ -72,6 +73,7 @@ var configOptions = new ConfigurationOptions
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(configOptions));
 builder.Services.AddMassTransit(x =>
 {
+    x.AddConsumer<GetUserNameConsumer>();
     x.UsingRabbitMq((context, cfg) =>
     {
         var host = builder.Configuration["RabbitMQ:HostName"] ?? "localhost";
@@ -81,6 +83,7 @@ builder.Services.AddMassTransit(x =>
                 h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
             }
         );
+        cfg.ConfigureEndpoints(context);
     });
 });
 

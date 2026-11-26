@@ -18,6 +18,7 @@ export interface GetOrCreateChatRequest {
   productName?: string | null;
   targetUserId: string;
   initiatorName: string;
+  TargetUserName: string;
 }
 
 export interface GetChatHistoryRequest {

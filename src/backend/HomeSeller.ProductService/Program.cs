@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading.RateLimiting;
 using DotNetEnv;
 using HomeSeller.ProductService.StoreService;
+using HomeSeller.Shared.EventProfile;
 using HomeSellerServer.Interface;
 using HomeSellerServer.Module;
 using MassTransit;
@@ -76,6 +77,7 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<UserDeleteConsumer>();
+    x.AddRequestClient<GetUserNameRequest>();
     x.UsingRabbitMq((context, cfg) =>
     {
         var host = builder.Configuration["RabbitMQ:HostName"]?? "localhost";

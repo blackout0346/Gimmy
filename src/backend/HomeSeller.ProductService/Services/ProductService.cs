@@ -4,6 +4,8 @@ using HomeSeller.ProductService.DTO.Rates;
 using HomeSeller.ProductService.Modules;
 using HomeSeller.Shared.CacheHelper;
 using HomeSeller.Shared.EventProduct;
+using HomeSeller.Shared.EventProfile;
+using HomeSeller.Shared.EventRates;
 using HomeSellerServer.Interface;
 using MassTransit;
 using ProductService.DTO.Products;
@@ -16,6 +18,7 @@ namespace HomeSeller.ProductService.Services;
 
 public class ProductService : IProductService
 {
+    private readonly IRequestClient<GetUserNameRequest> _userNameClient;
     private readonly IProductStore _productStore;
     private readonly IPublishEndpoint _publishEndpoint;
     private readonly ILogger<ProductService> _logger;
@@ -23,9 +26,10 @@ public class ProductService : IProductService
     private readonly TimeSpan? _cacheExpiry = TimeSpan.FromHours(1);
     private readonly ImagesSystem _imagesSystem;
 
-    public ProductService(ImagesSystem imagesSystem, IProductStore productStore, IPublishEndpoint publishEndpoint, ILogger<ProductService> logger,
+    public ProductService(ImagesSystem imagesSystem,IRequestClient<GetUserNameRequest> userNameClient, IProductStore productStore, IPublishEndpoint publishEndpoint, ILogger<ProductService> logger,
         IConnectionMultiplexer muxer)
     {
+        _userNameClient = userNameClient;
         _imagesSystem = imagesSystem;
         _redis = muxer.GetDatabase();
         _logger = logger;
@@ -94,7 +98,13 @@ public class ProductService : IProductService
     public async Task<ProductsResponse> CreateProductAsync(Guid userId, ProductsRequest request)
     {
         var newProductId = Guid.NewGuid();
- 
+        var userNameResponse = await _userNameClient.GetResponse<GetUserNameResponse>(
+            new GetUserNameRequest { UserId = userId });
+
+        var username = string.IsNullOrWhiteSpace(userNameResponse.Message.UserName)
+            ? "Пользователь"
+            : userNameResponse.Message.UserName;
+
         var product = new Products
         {
             Id = newProductId,
@@ -103,6 +113,7 @@ public class ProductService : IProductService
             Price = request.Price,
             ConditionId = request.ConditionId,
             UserId = userId,
+            SellerLogin = username,
             CreateAt = DateTime.UtcNow,
             Position = request.Position,
             ImageURLs = request.ImageURLs?.Where(img => !string.IsNullOrWhiteSpace(img)).Select(img => new ProductImage
@@ -150,6 +161,7 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
         NameProduct = request.NameProduct,
         Description = request.Description,
         Price = request.Price,
+        SellerLogin = existing.SellerLogin,
         ConditionId = request.ConditionId,
         UserId = existing.UserId,
         Position = request.Position,
@@ -276,11 +288,18 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
         {
             throw new InvalidOperationException("Вы уже оставляли отзыв на этот товар");
         }
+        var userNameResponse = await _userNameClient.GetResponse<GetUserNameResponse>(
+            new GetUserNameRequest { UserId = userId });
+
+        var username = string.IsNullOrWhiteSpace(userNameResponse.Message.UserName)
+            ? "Пользователь"
+            : userNameResponse.Message.UserName;
 
         var rateId = Guid.NewGuid();
         var item = new RateProductItem
         {
             Id = rateId,
+            Username = username,
             ProductId = request.ProductId,
             UserId = userId,
             Rate =  request.Rate,
@@ -297,6 +316,16 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
         };
 
         await _productStore.RateAddAsync(item);
+        await _publishEndpoint.Publish(new RatesUploadEvent
+        {
+            ProductId = product.Id,
+            ProductOwnerId = product.UserId,
+            UserName = username,
+            ProductName = product.NameProduct,
+            descRate = item.DescriptionRate ?? string.Empty,
+            Rate = item.Rate,
+            CreateAt = DateTime.UtcNow,
+        });
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"rates:product:{request.ProductId}");
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"products:id{request.ProductId}");
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, "products:All");
@@ -335,6 +364,7 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
             Id = rateId,
             UserId = userId,
             Rate =  request.Rate,
+            Username = currentRate.Username,
             ProductId = currentRate.ProductId,
             DescriptionRate = request.DescriptionRate?.Trim() ?? string.Empty,
             RateProductImages = updateImages
@@ -400,6 +430,7 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
         Id = products.Id,
         UserId = products.UserId,
         CreateAt = products.CreateAt,
+        SellerLogin = products.SellerLogin,
         Description = products.Description,
         Price = products.Price,
         ImageURLs = products.ImageURLs?.Select(img => img.ImageURL).ToList(),
@@ -420,6 +451,7 @@ public async Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid produ
             Id = item.Id,
             ProductId = item.ProductId,
             UserId = item.UserId,
+            UserName = item.Username,
             DescriptionRate = item.DescriptionRate,
             Rate = item.Rate,
             

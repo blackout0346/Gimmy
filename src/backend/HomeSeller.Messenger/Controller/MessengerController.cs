@@ -41,9 +41,16 @@ public class MessengerController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetOrCreateChat([FromBody] GetOrCreateChatRequest request)
     {
-        var userId = GetUserId();
-        var chat = await _messangerService.GetOrCreateChatAsync(userId, request);
-        return Ok(chat);
+        try
+        {
+            var userId = GetUserId();
+            var chat = await _messangerService.GetOrCreateChatAsync(userId, request);
+            return Ok(chat);
+        }catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+   
     }
 
     [HttpGet("chats/{chatId:guid}/messages")]

@@ -8,6 +8,7 @@ public class RateResponse
     public Guid ProductId { get; set; }
     public DateTime CreateAt { get; set; }
     public DateTime UpdateAt { get; set; }
+    public string UserName { get; set; } = string.Empty;
     public List<string> ImageURLs { get; set; }
     public Guid UserId { get; set; }
 }

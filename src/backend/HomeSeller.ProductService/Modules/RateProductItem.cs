@@ -8,6 +8,7 @@ public class RateProductItem
     public Guid ProductId { get; set; }
     public Products Product { get; set; } = null!;
     public Guid UserId { get; set; }
+    public string Username { get; set; } =string.Empty;
     public string? DescriptionRate { get; set; }
     public int Rate
     {

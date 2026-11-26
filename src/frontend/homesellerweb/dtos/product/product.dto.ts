@@ -21,3 +21,22 @@ export interface ProductsResponse {
   position: string;
   tags: string[];
 }
+export interface RateResponse{
+  id:string,
+  descriptionRate :string,
+  rate: number,
+  productId:string,
+  createAt:string,
+  updateAt:string,
+  userName:string,
+  imageURLs: string[] | null,
+  userId:string;
+}
+export interface RateRequest{
+  id:string,
+  descriptionRate :string,
+  rate: number,
+  imageURLs: string[] | null,
+  productId:string,
+  
+}

@@ -4,6 +4,7 @@ using HomeSeller.Notification.Services;
 using HomeSeller.Shared.EventMessenger;
 using HomeSeller.Shared.EventProduct;
 using HomeSeller.Shared.EventProfle;
+using HomeSeller.Shared.EventRates;
 using HomeSeller.Shared.EventUser;
 using MassTransit;
 using Microsoft.AspNetCore.SignalR;
@@ -19,7 +20,8 @@ public class NotificationConsumer :
     IConsumer<UserDeletedEvent>,
     IConsumer<MessageSentEvent>,
     IConsumer<ChatCreatedEvent>,
-    IConsumer<ProfileUpdateEvent>
+    IConsumer<ProfileUpdateEvent>,
+    IConsumer<RatesUploadEvent>
 {
     private readonly IHubContext<NotificationHub, INotificationClient> _hubContext;
     private readonly ILogger<NotificationConsumer> _logger;
@@ -184,5 +186,24 @@ public class NotificationConsumer :
     }
 
 
-  
+    public async Task Consume(ConsumeContext<RatesUploadEvent> context)
+    {
+        var msg = context.Message;
+        var author = string.IsNullOrWhiteSpace(msg.UserName) ? "Пользователь" : msg.UserName;
+        var productName = string.IsNullOrWhiteSpace(msg.ProductName) ? "Без названия" : msg.ProductName;
+
+        var commentPart = string.IsNullOrWhiteSpace(msg.descRate)
+            ? string.Empty
+            : msg.descRate.Length > 80
+                ? $" с комментарием: «{msg.descRate[..80]}...»"
+                : $" с комментарием: «{msg.descRate}»";
+
+        await SendToUserAsync(msg.ProductOwnerId, new NotificationDto(
+            Type: nameof(RatesUploadEvent),
+            Title: $"Новый отзыв ({msg.Rate}/5 ★)",
+            Message: $"Пользователь «{author}» оценил ваш товар «{productName}» на {msg.Rate} из 5{commentPart} ({msg.CreateAt:dd.MM.yyyy в HH:mm} UTC).",
+            EntityId: msg.ProductId,
+            CreatedAt: msg.CreateAt
+        ));
+    }
 }

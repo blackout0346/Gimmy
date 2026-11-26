@@ -13,8 +13,4 @@
       <PackageReference Include="StackExchange.Redis" Version="4.0.146-alpha" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="EventCart\" />
-    </ItemGroup>
-
 </Project>

@@ -73,7 +73,7 @@ public class MessangerService : IMessangerService
             ChatId = request.ChatId,
             Page = page,
             PageSize = pageSize,
-            Messages = messages.Select(MapToMessageResponse).ToList()
+            Messages = messages.Select(m=>MapToMessageResponse(m, chat)).ToList()
         };
 
         if (page == 1)
@@ -143,7 +143,7 @@ public class MessangerService : IMessangerService
         };
 
         var created = await _store.CreateMessageAsync(message);
-        var response = MapToMessageResponse(created);
+        var response = MapToMessageResponse(created, chat);
 
         await CacheHelper.SetCacheAsync(_redis, _logger, response, $"messenger:msg:{created.Id}", _cacheExpiry);
         await CacheHelper.InvalidateCacheAsync(_redis, _logger, $"messenger:chat:{request.ChatId}:history:p1:s50");
@@ -202,9 +202,14 @@ public class MessangerService : IMessangerService
         if (userId == request.TargetUserId)
             throw new InvalidOperationException("Нельзя создать чат с самим собой.");
 
-        var (firstUserId, secondUserId) = userId.CompareTo(request.TargetUserId) < 0
+        bool isCurrentUserFirst =userId.CompareTo(request.TargetUserId) < 0;
+        
+        var (firstUserId, secondUserId) =isCurrentUserFirst
             ? (userId, request.TargetUserId)
             : (request.TargetUserId, userId);
+        var (firstUserName, secondUserName) = isCurrentUserFirst
+            ? (request.InitiatorName, request.TargetUserName)
+            : (request.TargetUserName, request.InitiatorName);
 
         var existingChat = await _store.GetChatByProductAndUserAsync(
             request.ProductId, firstUserId, secondUserId);
@@ -217,8 +222,11 @@ public class MessangerService : IMessangerService
         {
             Id = Guid.NewGuid(),
             ProductId = request.ProductId,
+            ProductName = request.ProductName ?? string.Empty,
             UserId1 = firstUserId,
+            UserName1 = firstUserName,
             UserId2 = secondUserId,
+            UserName2 = secondUserName,
             CreateAt = now
         };
 
@@ -291,14 +299,24 @@ public class MessangerService : IMessangerService
         }).ToList();
     }
 
-    private static MessageResponse MapToMessageResponse(Message m)
+    private static MessageResponse MapToMessageResponse(Message m, Chat? chat = null)
     {
+        var currentChat = chat ?? m.Chat;
+
+        string ResolveUserName(Guid senderId)
+        {
+            if (currentChat is null) return string.Empty;
+            if (senderId == currentChat.UserId1) return currentChat.UserName1;
+            if (senderId == currentChat.UserId2) return currentChat.UserName2;
+            return string.Empty;
+        }
         return new MessageResponse
         {
             Id = m.Id,
             ChatId = m.ChatId,
             UserId = m.UserId,
             Text = m.message,
+            SenderName = ResolveUserName(m.UserId),
             ReplyId = m.ReplyId,
             Reply = m.Reply is null
                 ? null
@@ -306,6 +324,7 @@ public class MessangerService : IMessangerService
                 {
                     Id = m.Reply.Id,
                     UserId = m.Reply.UserId,
+                    SenderName = ResolveUserName(m.Reply.UserId),
                     Text = m.Reply.message
                 },
             CreateAt = m.CreateAt,
@@ -327,11 +346,11 @@ public class MessangerService : IMessangerService
         {
             Id = c.Id,
             ProductId = c.ProductId,
-            // UserName1 =c.UserName1,
-            // UserName2 = c.UserName2,
-            //
+            ProductName = c.ProductName,
             UserId1 = c.UserId1,
+            UserName1 = c.UserName1,
             UserId2 = c.UserId2,
+            UserName2 = c.UserName2,
             CreateAt = c.CreateAt
         };
     }

@@ -42,8 +42,9 @@ public class ProfileService : IProfileService
         }
 
         var profiles = await _profileStore.GetProfilesAsync();
-        await CacheHelper.SetCacheAsync(_redis, _logger, profiles, cacheKey, _cacheExpiry);
-        return profiles.Select(MapToResponse).ToList();
+        var response = profiles.Select(MapToResponse).ToList();
+        await CacheHelper.SetCacheAsync(_redis, _logger, response, cacheKey, _cacheExpiry);
+        return response;
     }
 
     public async Task<ProfileResponse?> GetProfileByUserIdAsync(Guid userId)
@@ -56,8 +57,14 @@ public class ProfileService : IProfileService
         }
 
         var profile = await _profileStore.GetProfileByUserIdAsync(userId);
-        await CacheHelper.SetCacheAsync(_redis, _logger, profile, cacheKey, _cacheExpiry);
-        return profile is null ? null : MapToResponse(profile);
+        if (profile is null)
+        {
+            return null;
+        }
+
+        var response = MapToResponse(profile);
+        await CacheHelper.SetCacheAsync(_redis, _logger, response, cacheKey, _cacheExpiry);
+        return response;
     }
 
     public async Task<ProfileResponse?> GetProfileByIdAsync(Guid id)
@@ -70,9 +77,14 @@ public class ProfileService : IProfileService
         }
 
         var profile = await _profileStore.GetProfileByIdAsync(id);
+        if (profile is null)
+        {
+            return null;
+        }
 
-        await CacheHelper.SetCacheAsync(_redis, _logger, profile, cacheKey, _cacheExpiry);
-        return profile is null ? null : MapToResponse(profile);
+        var response = MapToResponse(profile); 
+        await CacheHelper.SetCacheAsync(_redis, _logger, response, cacheKey, _cacheExpiry);
+        return response;
     }
 
     public async Task<ProfileResponse> AddProfileAsync(Guid userId, ProfileRequest request)

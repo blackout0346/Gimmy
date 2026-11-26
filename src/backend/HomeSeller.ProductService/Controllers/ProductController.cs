@@ -103,7 +103,7 @@ public class ProductController : ControllerBase
         }
     }
     [HttpGet("GetTag")]
-
+    [AllowAnonymous]
     [ProducesResponseType(typeof(IEnumerable<TagResponse>), 200)]
     public async Task<IActionResult> GetTags()
     {
@@ -118,7 +118,7 @@ public class ProductController : ControllerBase
         }
     }
     [HttpGet("GetCondition")]
-
+    [AllowAnonymous]
     [ProducesResponseType(typeof(IEnumerable<ConditionResponse>), 200)]
     public async Task<IActionResult> GetCondition()
     {

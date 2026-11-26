@@ -17,6 +17,7 @@ public class Products
     public Condition Condition{get;set;} = null!;
     public Guid UserId {get;set;}
   
+    public string SellerLogin { get; set; }= string.Empty;
     public DateTime CreateAt { get; set; } = DateTime.UtcNow;
     public ICollection<ProductTag> ProductTags { get; set; } = new List<ProductTag>();
     public string Position { get; set; }
