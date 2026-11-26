@@ -3,80 +3,92 @@ namespace ProductService.ImagesServices;
 public class ImagesSystem
 {
     private readonly IHostEnvironment _env;
-    private const string FolderName = "imageStore";
+    private const string RootFolderName = "imageStore";
 
-    enum coded
+    private enum AllowedExtensions
     {
         jpg,
         png,
         jpeg,
         gif,
         bmp,
-        pngbmp,
-        
+        pngbmp
     }
+
     public ImagesSystem(IHostEnvironment env)
     {
         _env = env;
     }
-    private string InitDirectory()
+
+    private string InitDirectory(string? subFolder = null)
     {
-     
-        var safeFolder = Path.Combine(_env.ContentRootPath, FolderName);
-        Directory.CreateDirectory(safeFolder);
-        return safeFolder;
+        var rootFolder = Path.Combine(_env.ContentRootPath, RootFolderName);
+        var targetFolder = string.IsNullOrWhiteSpace(subFolder)
+            ? rootFolder
+            : Path.Combine(rootFolder, subFolder.Trim('/', '\\'));
+
+        Directory.CreateDirectory(targetFolder);
+        return targetFolder;
     }
-    public async Task<string> SaveImageAsync(IFormFile Uploadfile)
+
+    public async Task<string> SaveImageAsync(IFormFile uploadFile, string? subFolder = null)
     {
-        try
+        if (uploadFile == null || uploadFile.Length == 0)
         {
-            if ( Uploadfile.Length == 0)
-            {
-                throw new Exception("Uploadfile is empty");
-            }
-            
-  
-            var extension = Path.GetExtension(Uploadfile.FileName).TrimStart('.');
-            if (string.IsNullOrWhiteSpace(extension)||
-                !Enum.TryParse<coded>(extension, true, out var code)||
-                !Enum.IsDefined(typeof(coded), code))
-            {
-                throw new Exception($"Недопустимый формат файла. Разрешены: {string.Join(", ", Enum.GetNames<coded>())}");
-            }          
-            var safefolder = InitDirectory();
-            var uniquefilename = $"{Guid.NewGuid()}.{extension.ToLowerInvariant()}";
-            var clearpath = Path.Combine(safefolder, uniquefilename);
-
-            using (var filestream = new FileStream(clearpath, FileMode.Create))
-            {
-                await Uploadfile.CopyToAsync(filestream);
-            }
-
-            return $"/{FolderName}/{uniquefilename}";
-
+            throw new Exception("Uploadfile is empty");
         }
-        catch (Exception e)
+
+        var extension = Path.GetExtension(uploadFile.FileName).TrimStart('.');
+        if (string.IsNullOrWhiteSpace(extension) ||
+            !Enum.TryParse<AllowedExtensions>(extension, true, out var code) ||
+            !Enum.IsDefined(typeof(AllowedExtensions), code))
         {
-            Console.WriteLine(e);
-            throw;
+            throw new Exception($"Недопустимый формат файла. Разрешены: {string.Join(", ", Enum.GetNames<AllowedExtensions>())}");
         }
+
+        var safeFolder = InitDirectory(subFolder);
+        var uniqueFileName = $"{Guid.NewGuid()}.{extension.ToLowerInvariant()}";
+        var clearPath = Path.Combine(safeFolder, uniqueFileName);
+
+        await using (var fileStream = new FileStream(clearPath, FileMode.Create))
+        {
+            await uploadFile.CopyToAsync(fileStream);
+        }
+
+        return string.IsNullOrWhiteSpace(subFolder)
+            ? $"/{RootFolderName}/{uniqueFileName}"
+            : $"/{RootFolderName}/{subFolder.Trim('/')}/{uniqueFileName}";
     }
 
     public void DeleteImage(string relativeImageUrl)
-    {if (string.IsNullOrWhiteSpace(relativeImageUrl)) return;
-        var safeFolder = InitDirectory();
+    {
+        if (string.IsNullOrWhiteSpace(relativeImageUrl)) return;
 
-        var filename = Path.GetFileName(relativeImageUrl);
-        var clearpath = Path.Combine(safeFolder, filename);
+        var rootFolder = Path.GetFullPath(InitDirectory());
 
-     
-            File.Delete(clearpath);
-        
-      
+   
+        var relativePath = relativeImageUrl.TrimStart('/');
+        if (relativePath.StartsWith($"{RootFolderName}/", StringComparison.OrdinalIgnoreCase))
+        {
+            relativePath = relativePath[(RootFolderName.Length + 1)..];
+        }
+
+        var fullPath = Path.GetFullPath(Path.Combine(rootFolder, relativePath));
+
+    
+        if (!fullPath.StartsWith(rootFolder, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (File.Exists(fullPath))
+        {
+            File.Delete(fullPath);
+        }
     }
 
-    public void DeleteImages(IEnumerable<string> relativeImageUrl)
+    public void DeleteImages(IEnumerable<string> relativeImageUrls)
     {
-        Parallel.ForEach(relativeImageUrl, new ParallelOptions { MaxDegreeOfParallelism = 4 }, DeleteImage);
+        Parallel.ForEach(relativeImageUrls, new ParallelOptions { MaxDegreeOfParallelism = 4 }, DeleteImage);
     }
 }

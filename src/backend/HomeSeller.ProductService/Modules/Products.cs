@@ -1,4 +1,5 @@
 ﻿
+using HomeSeller.ProductService.Modules;
 using HomeSellerServer.Module;
 
 namespace ProductService.Module;
@@ -20,6 +21,7 @@ public class Products
     public ICollection<ProductTag> ProductTags { get; set; } = new List<ProductTag>();
     public string Position { get; set; }
     public bool isDeleted { get; set; } = false;
+    public ICollection<RateProductItem> RateProductItems { get; set; } = new List<RateProductItem>();
     
   
 }
