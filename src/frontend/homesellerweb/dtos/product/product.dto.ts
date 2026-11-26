@@ -38,5 +38,26 @@ export interface RateRequest{
   rate: number,
   imageURLs: string[] | null,
   productId:string,
-  
+
+}
+export interface ProductFilterRequest {
+  search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  conditionId?: string;
+  tagIds?: string[];
+  position?: string;
+  minRating?: number;
+  sortBy?: 'newest' | 'price_asc' | 'price_desc' | 'rating_desc';
+  page?: number;
+  pageSize?: number;
+}
+export interface ConditionResponse {
+  id: string;
+  name: string;
+}
+
+export interface TagResponse {
+  id: string;
+  name: string;
 }

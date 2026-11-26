@@ -44,50 +44,47 @@ public class ProductService : IProductService
         _productStore = productStore;
     }
 
-    public async Task<IEnumerable<ProductsResponse>> GetProductsAsync(
-        string? search = null,
-        int page = 1,
-        int pageSize = 20)
+    public async Task<IEnumerable<ProductsResponse>> GetProductsAsync(ProductFilterRequest filter)
+{
+    if (filter.Page < 1) filter.Page = 1;
+    if (filter.PageSize < 1 || filter.PageSize > 100) filter.PageSize = 20;
+
+    var version = await CacheHelper.GetVersionAsync(_redis, _logger, ProductsVersionKey);
+    var cacheKey = BuildFilterCacheKey(version, filter);
+
+    var cachedProducts = await CacheHelper.GetCacheAsync<IEnumerable<ProductsResponse>>(_redis, _logger, cacheKey);
+    if (cachedProducts != null)
     {
-        if (page < 1) page = 1;
-        if (pageSize < 1 || pageSize > 100) pageSize = 20;
-
-        var version = await CacheHelper.GetVersionAsync(_redis, _logger, ProductsVersionKey);
-        var isSearch = !string.IsNullOrWhiteSpace(search);
-        var cacheKey = isSearch
-            ? $"products:v{version}:search:{search!.Trim().ToLowerInvariant()}:p{page}:s{pageSize}"
-            : $"products:v{version}:All:p{page}:s{pageSize}";
-
-        var cachedProducts = await CacheHelper.GetCacheAsync<IEnumerable<ProductsResponse>>(_redis, _logger, cacheKey);
-        if (cachedProducts != null)
-        {
-            _logger.LogInformation("get cache: {CacheKey}", cacheKey);
-            return cachedProducts;
-        }
-
-        var products = (await _productStore.GetProducts(search, page, pageSize)).ToList();
-
-        if (products.Count == 0)
-        {
-            return Enumerable.Empty<ProductsResponse>();
-        }
-
-        var ratingsMap = await _productStore.GetProductsRatingStateAsync(products.Select(p => p.Id));
-        var productsResponse = products
-            .Select(p => MapToResponse(p, ratingsMap.GetValueOrDefault(p.Id)))
-            .ToList();
-
-        await CacheHelper.SetCacheAsync(
-            _redis,
-            _logger,
-            productsResponse,
-            cacheKey,
-            isSearch ? TimeSpan.FromMinutes(5) : _cacheExpiry);
-
-        _logger.LogInformation("get no cache: {CacheKey}", cacheKey);
-
-        return productsResponse;
+        _logger.LogInformation("get cache: {CacheKey}", cacheKey);
+        return cachedProducts;
     }
+
+    var products = (await _productStore.GetProducts(filter)).ToList();
+
+    if (products.Count == 0)
+    {
+        return Enumerable.Empty<ProductsResponse>();
+    }
+
+    var ratingsMap = await _productStore.GetProductsRatingStateAsync(products.Select(p => p.Id));
+    var productsResponse = products
+        .Select(p => MapToResponse(p, ratingsMap.GetValueOrDefault(p.Id)))
+        .ToList();
+
+    // Если применены любые фильтры/поиск — кэшируем на 5 минут, иначе на стандартный _cacheExpiry (1 час)
+    var hasFilters = IsFiltered(filter);
+    await CacheHelper.SetCacheAsync(
+        _redis,
+        _logger,
+        productsResponse,
+        cacheKey,
+        hasFilters ? TimeSpan.FromMinutes(5) : _cacheExpiry);
+
+    _logger.LogInformation("get no cache: {CacheKey}", cacheKey);
+
+    return productsResponse;
+}
+
 
     public async Task<ProductsResponse?> GetProductByIdAsync(Guid id)
     {
@@ -471,5 +468,35 @@ public class ProductService : IProductService
                 .Select(img => img.ImageURL)
                 .ToList() ?? new List<string>()
         };
+    }
+    
+    private static bool IsFiltered(ProductFilterRequest f) =>
+        !string.IsNullOrWhiteSpace(f.Search) ||
+        f.MinPrice.HasValue ||
+        f.MaxPrice.HasValue ||
+        f.ConditionId.HasValue ||
+        (f.TagIds != null && f.TagIds.Count > 0) ||
+        !string.IsNullOrWhiteSpace(f.Position) ||
+        f.MinRating.HasValue ||
+        (!string.IsNullOrWhiteSpace(f.SortBy) && f.SortBy != "newest");
+
+    private static string BuildFilterCacheKey(long version, ProductFilterRequest f)
+    {
+        var searchPart = string.IsNullOrWhiteSpace(f.Search) ? "none" : f.Search.Trim().ToLowerInvariant();
+        var tagsPart = (f.TagIds != null && f.TagIds.Count > 0)
+            ? string.Join(",", f.TagIds.OrderBy(id => id))
+            : "none";
+        var posPart = string.IsNullOrWhiteSpace(f.Position) ? "none" : f.Position.Trim().ToLowerInvariant();
+
+        return $"products:v{version}" +
+               $":q:{searchPart}" +
+               $":minP:{f.MinPrice?.ToString() ?? "none"}" +
+               $":maxP:{f.MaxPrice?.ToString() ?? "none"}" +
+               $":cond:{f.ConditionId?.ToString() ?? "none"}" +
+               $":tags:{tagsPart}" +
+               $":pos:{posPart}" +
+               $":rate:{f.MinRating?.ToString() ?? "none"}" +
+               $":sort:{f.SortBy ?? "newest"}" +
+               $":p{f.Page}:s{f.PageSize}";
     }
 }

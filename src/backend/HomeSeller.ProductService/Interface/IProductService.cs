@@ -6,7 +6,7 @@ namespace HomeSellerServer.Interface;
 
 public interface IProductService
 {
-    Task<IEnumerable<ProductsResponse>> GetProductsAsync(string? search = null ,int page=1 ,int  pageSize =20);
+    Task<IEnumerable<ProductsResponse>> GetProductsAsync(ProductFilterRequest filter);
     Task<ProductsResponse?> GetProductByIdAsync(Guid productid);
     Task<ProductsResponse> CreateProductAsync(Guid userId, ProductsRequest request);
     Task<ProductsResponse?> UpdateProductsAsync(Guid userId, Guid productid, ProductsRequest request);

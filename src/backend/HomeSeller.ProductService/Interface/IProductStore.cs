@@ -1,14 +1,12 @@
 ﻿using HomeSeller.ProductService.Modules;
+using ProductService.DTO.Products;
 using ProductService.Module;
 
 namespace ProductService.Interface;
 
 public interface IProductStore
 {
-    public Task<IEnumerable<Products>> GetProducts(
-        string? search = null,
-        int page = 1,
-        int pageSize = 20);
+    Task<IEnumerable<Products>> GetProducts(ProductFilterRequest filter);
     public Task<Products?> GetProductsIdAsync(Guid id);
     public Task<bool> DeleteProductAsync(Guid productId);
     public Task ProductsAddAsync(Products products);

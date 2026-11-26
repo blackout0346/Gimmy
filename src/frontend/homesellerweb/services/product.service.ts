@@ -1,21 +1,44 @@
 import { apiFetch } from '@/lib/http';
-import { ProductsRequest, ProductsResponse } from '@/dtos/product/product.dto';
+import { ConditionResponse,
+  ProductFilterRequest,
+  ProductsRequest,
+  ProductsResponse,
+  TagResponse, } from '@/dtos/product/product.dto';
 
 const BASE_URL = `${process.env.NEXT_PUBLIC_PRODUCT_API_URL}/api/Product`;
 
 export const productService = {
   async getProducts(
-    search?: string,
-    page = 1,
-    pageSize = 20
+    filter: ProductFilterRequest = {}
   ): Promise<ProductsResponse[]> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      pageSize: pageSize.toString(),
-    });
+    const params = new URLSearchParams();
 
-    if (search?.trim()) {
-      params.append('search', search.trim());
+    params.append('page', (filter.page ?? 1).toString());
+    params.append('pageSize', (filter.pageSize ?? 20).toString());
+
+    if (filter.search?.trim()) {
+      params.append('search', filter.search.trim());
+    }
+    if (filter.minPrice !== undefined && !Number.isNaN(filter.minPrice)) {
+      params.append('minPrice', filter.minPrice.toString());
+    }
+    if (filter.maxPrice !== undefined && !Number.isNaN(filter.maxPrice)) {
+      params.append('maxPrice', filter.maxPrice.toString());
+    }
+    if (filter.conditionId) {
+      params.append('conditionId', filter.conditionId);
+    }
+    if (filter.position?.trim()) {
+      params.append('position', filter.position.trim());
+    }
+    if (filter.minRating !== undefined && !Number.isNaN(filter.minRating)) {
+      params.append('minRating', filter.minRating.toString());
+    }
+    if (filter.sortBy) {
+      params.append('sortBy', filter.sortBy);
+    }
+    if (filter.tagIds && filter.tagIds.length > 0) {
+      filter.tagIds.forEach((id) => params.append('tagIds', id));
     }
 
     return apiFetch<ProductsResponse[]>(
@@ -25,6 +48,20 @@ export const productService = {
         auth: false,
       }
     );
+  },
+
+  async getConditions(): Promise<ConditionResponse[]> {
+    return apiFetch<ConditionResponse[]>(`${BASE_URL}/GetCondition`, {
+      method: 'GET',
+      auth: false,
+    });
+  },
+
+  async getTags(): Promise<TagResponse[]> {
+    return apiFetch<TagResponse[]>(`${BASE_URL}/GetTag`, {
+      method: 'GET',
+      auth: false,
+    });
   },
 
   async getProductById(productId: string): Promise<ProductsResponse> {

@@ -2,6 +2,7 @@
 using HomeSeller.ProductService.Modules;
 using HomeSellerServer.Module;
 using Microsoft.EntityFrameworkCore;
+using ProductService.DTO.Products;
 using ProductService.ImagesServices;
 using ProductService.Interface;
 using ProductService.Module;
@@ -19,35 +20,76 @@ public class ProductStore : IProductStore
         this._dbcontext = context;
     }
 
-    public async Task<IEnumerable<Products>> GetProducts(
-        string? search = null, 
-        int page = 1, 
-        int pageSize = 20)
-    {
-     
-        if (page < 1) page = 1;
-        if (pageSize < 1 || pageSize > 100) pageSize = 20;
-
-        var query = _dbcontext.Products
-            .AsNoTracking()
-            .Include(p => p.Condition)
-            .Include(p => p.ImageURLs)
-            .Include(p => p.ProductTags)
+    public async Task<IEnumerable<Products>> GetProducts(ProductFilterRequest filter)
+{
+    var query = _dbcontext.Products
+        .AsNoTracking()
+        .Include(p => p.Condition)
+        .Include(p => p.ImageURLs)
+        .Include(p => p.ProductTags)
             .ThenInclude(pt => pt.Tag)
-            .AsQueryable();
+        .Where(p => !p.isDeleted)
+        .AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var searchTerm = $"%{search.Trim()}%"; 
-            query = query.Where(p => EF.Functions.ILike(p.NameProduct, searchTerm));
-        }
-
-        return await query
-            .OrderBy(p => p.Id)
-            .Skip((page - 1) * pageSize) 
-            .Take(pageSize)             
-            .ToListAsync();
+    if (!string.IsNullOrWhiteSpace(filter.Search))
+    {
+        var search = filter.Search.Trim().ToLower();
+        query = query.Where(p =>
+            p.NameProduct.ToLower().Contains(search) ||
+            p.Description.ToLower().Contains(search));
     }
+
+    if (filter.MinPrice.HasValue)
+    {
+        query = query.Where(p => p.Price >= filter.MinPrice.Value);
+    }
+    if (filter.MaxPrice.HasValue)
+    {
+        query = query.Where(p => p.Price <= filter.MaxPrice.Value);
+    }
+
+    if (filter.ConditionId.HasValue)
+    {
+        query = query.Where(p => p.ConditionId == filter.ConditionId.Value);
+    }
+
+    if (filter.TagIds != null && filter.TagIds.Count > 0)
+    {
+        var expandedTagIds = await _dbcontext.Tags
+            .Where(t => filter.TagIds.Contains(t.Id) || (t.ParentTagId.HasValue && filter.TagIds.Contains(t.ParentTagId.Value)))
+            .Select(t => t.Id)
+            .ToListAsync();
+
+        query = query.Where(p => p.ProductTags.Any(pt => expandedTagIds.Contains(pt.TagId)));
+    }
+
+    if (!string.IsNullOrWhiteSpace(filter.Position))
+    {
+        var pos = filter.Position.Trim().ToLower();
+        query = query.Where(p => p.Position.ToLower().Contains(pos));
+    }
+
+    if (filter.MinRating.HasValue)
+    {
+        query = query.Where(p =>
+            p.RateProductItems.Any(r => !r.IsDeleted) &&
+            p.RateProductItems.Where(r => !r.IsDeleted).Average(r => r.Rate) >= filter.MinRating.Value);
+    }
+
+    query = filter.SortBy?.ToLowerInvariant() switch
+    {
+        "price_asc" => query.OrderBy(p => p.Price),
+        "price_desc" => query.OrderByDescending(p => p.Price),
+        "rating_desc" => query.OrderByDescending(p =>
+            p.RateProductItems.Where(r => !r.IsDeleted).Select(r => (double?)r.Rate).Average() ?? 0),
+        _ => query.OrderByDescending(p => p.CreateAt)
+    };
+
+    return await query
+        .Skip((filter.Page - 1) * filter.PageSize)
+        .Take(filter.PageSize)
+        .ToListAsync();
+}
 
     public async Task<Products?> GetProductsIdAsync(Guid id)
     {
@@ -210,7 +252,7 @@ public class ProductStore : IProductStore
         try
         {
             var updaterate = await _dbcontext.RateProductItem
-                .Where(p => p.UserId == userId)
+                .Where(p => p.UserId == userId && p.Id == rate.Id && !p.IsDeleted)
                 .ExecuteUpdateAsync(setter => setter
                     .SetProperty(p => p.Rate, rate.Rate)
                     .SetProperty(p => p.DescriptionRate, rate.DescriptionRate)
