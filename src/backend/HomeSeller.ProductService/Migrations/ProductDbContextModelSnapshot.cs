@@ -23,6 +23,63 @@ namespace ProductService.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("HomeSeller.ProductService.Modules.RateProductImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ImageURL")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("RateProductItemId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RateProductItemId");
+
+                    b.ToTable("RateProductImage", "SellShop.Product");
+                });
+
+            modelBuilder.Entity("HomeSeller.ProductService.Modules.RateProductItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DescriptionRate")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Rate")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("RateProductItem", "SellShop.Product");
+                });
+
             modelBuilder.Entity("ProductService.Module.Condition", b =>
                 {
                     b.Property<Guid>("Id")
@@ -154,6 +211,28 @@ namespace ProductService.Migrations
                     b.ToTable("Tags", "SellShop.Product");
                 });
 
+            modelBuilder.Entity("HomeSeller.ProductService.Modules.RateProductImage", b =>
+                {
+                    b.HasOne("HomeSeller.ProductService.Modules.RateProductItem", "RateProductItem")
+                        .WithMany("RateProductImages")
+                        .HasForeignKey("RateProductItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RateProductItem");
+                });
+
+            modelBuilder.Entity("HomeSeller.ProductService.Modules.RateProductItem", b =>
+                {
+                    b.HasOne("ProductService.Module.Products", "Product")
+                        .WithMany("RateProductItems")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("ProductService.Module.ProductImage", b =>
                 {
                     b.HasOne("ProductService.Module.Products", "Products")
@@ -170,13 +249,13 @@ namespace ProductService.Migrations
                     b.HasOne("ProductService.Module.Products", "Product")
                         .WithMany("ProductTags")
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ProductService.Module.Tags", "Tag")
                         .WithMany("ProductTags")
                         .HasForeignKey("TagId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Product");
@@ -205,6 +284,11 @@ namespace ProductService.Migrations
                     b.Navigation("ParentTag");
                 });
 
+            modelBuilder.Entity("HomeSeller.ProductService.Modules.RateProductItem", b =>
+                {
+                    b.Navigation("RateProductImages");
+                });
+
             modelBuilder.Entity("ProductService.Module.Condition", b =>
                 {
                     b.Navigation("Products");
@@ -215,6 +299,8 @@ namespace ProductService.Migrations
                     b.Navigation("ImageURLs");
 
                     b.Navigation("ProductTags");
+
+                    b.Navigation("RateProductItems");
                 });
 
             modelBuilder.Entity("ProductService.Module.Tags", b =>

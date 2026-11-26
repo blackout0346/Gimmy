@@ -18,6 +18,7 @@ public class ProductsResponse
     public Guid UserId { get; set; }
     public string SellerLogin { get; set; } = string.Empty;
 
-
+    public double AverageRating { get; set; }
+    public int RatingsCount { get; set; }
     public List<string> Tags { get; set; } = new();
 }

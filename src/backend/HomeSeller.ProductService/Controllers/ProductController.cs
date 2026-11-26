@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using HomeSeller.ProductService.DTO.Conditions;
 using HomeSellerServer.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -58,21 +59,24 @@ public class ProductController : ControllerBase
         {
             return BadRequest(ModelState);
         }
+        var uploadedUrls = new List<string>();
+        
         try
         {
-            
-
-            var uploadedurls = new List<string>();
             foreach (var file in files)
             {
                 
-                var url= await _imagesSystem.SaveImageAsync(file);
-                uploadedurls.Add(url);
+                var url= await _imagesSystem.SaveImageAsync(file, "products");
+                uploadedUrls.Add(url);
             }
-            return Ok(uploadedurls);
+            return Ok(uploadedUrls);
         }catch(Exception ex)
         {
-         
+            if (uploadedUrls.Count > 0)
+            {
+                _imagesSystem.DeleteImages(uploadedUrls);
+            }
+
             return BadRequest(ex.Message);
         }
         
@@ -98,7 +102,36 @@ public class ProductController : ControllerBase
             return BadRequest(ex.Message);
         }
     }
+    [HttpGet("GetTag")]
 
+    [ProducesResponseType(typeof(IEnumerable<TagResponse>), 200)]
+    public async Task<IActionResult> GetTags()
+    {
+        try
+        {
+            var result = await _productService.GetTagsAsync();
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+    [HttpGet("GetCondition")]
+
+    [ProducesResponseType(typeof(IEnumerable<ConditionResponse>), 200)]
+    public async Task<IActionResult> GetCondition()
+    {
+        try
+        {
+            var result = await _productService.GetConditionAsync();
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
 
     [HttpPost("AddProduct")]
     [ProducesResponseType(typeof(ProductsResponse), 200)]
@@ -163,6 +196,7 @@ public class ProductController : ControllerBase
         }
     }
 
+    
     private Guid GetUserId()
     {
         var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value

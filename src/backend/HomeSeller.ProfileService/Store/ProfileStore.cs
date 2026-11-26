@@ -129,31 +129,32 @@ public class ProfileStore : IProfileStore
     }
 
     public async Task DeleteProfileAsync(Guid userId)
-    {
-        var item = await _dbContext.UsersProfiles
-            .FirstOrDefaultAsync(u => u.UserId == userId);
-
-        if (item != null)
+    { 
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        try
         {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
-
-            var now = DateTime.UtcNow;
-
-            await _dbContext.UsersProfiles.Where(u => u.Id == item.Id)
+            await _dbContext.UsersProfiles.Where(u => u.Id == userId)
                 .ExecuteUpdateAsync(setter => setter
                     .SetProperty(u => u.IsDeleted, true)
-                    .SetProperty(u => u.DeletedAt, now)
-                    .SetProperty(u => u.UpdatedAt, now));
+                    .SetProperty(u => u.DeletedAt, DateTime.UtcNow)
+                    .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
 
-            await _dbContext.ProductUser.Where(p => p.UserProfilesId == item.Id)
+            await _dbContext.ProductUser.Where(p => p.UserProfilesId == userId)
                 .ExecuteUpdateAsync(setter => setter
                     .SetProperty(p => p.isDeleted, true));
 
-            await _dbContext.ProfileImage.Where(img => img.UserProfilesId == item.Id)
+            await _dbContext.ProfileImage.Where(img => img.UserProfilesId == userId)
                 .ExecuteUpdateAsync(setter => setter
                     .SetProperty(img => img.IsDeleted, true));
 
             await transaction.CommitAsync();
         }
+        catch(Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            await transaction.RollbackAsync();
+            throw;
+        }
+        
     }
 }
