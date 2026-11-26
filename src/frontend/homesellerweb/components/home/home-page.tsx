@@ -84,7 +84,9 @@ export function HomePage() {
     async function load() {
       try {
         if (!process.env.NEXT_PUBLIC_PRODUCT_API_URL) throw new Error("Product API URL is missing")
-        const result = await productService.getProducts(query || undefined)
+        const result = await productService.getProducts(
+          query ? { search: query } : undefined
+        )
         if (!cancelled) setProducts([...result].sort((a, b) => productTimestamp(b) - productTimestamp(a)))
       } catch {
         if (!cancelled) setLoadError(true)

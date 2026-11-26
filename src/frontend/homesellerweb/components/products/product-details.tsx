@@ -171,6 +171,7 @@ export function ProductDetails({ productId }: { productId: string }) {
         productName: product.nameProduct,
         targetUserId: product.userId,
         initiatorName: session.login || "Покупатель",
+        TargetUserName: sellerName,
       })
       if (!chat?.id) throw new Error("Chat ID is missing")
       if (mounted.current) router.push(`${routes.messages}?chatId=${encodeURIComponent(chat.id)}`)
