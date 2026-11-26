@@ -1,6 +1,6 @@
-export const AUTH_CHANGE_EVENT = 'gimmy:auth-change';
+export const AUTH_CHANGE_EVENT = 'homeseller:auth-change';
 
-const TOKEN_KEY = 'gimmy:access_token';
+const TOKEN_KEY = 'homeseller_access_token';
 
 export const tokenStorage = {
   get: (): string | null => {
@@ -22,7 +22,13 @@ export const tokenStorage = {
 };
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public body?: unknown,
+    public rawBody?: string,
+    public fieldErrors: Record<string, string[]> = {},
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -55,15 +61,39 @@ export async function apiFetch<T>(url: string, options: RequestOptions = {}): Pr
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    let errorMessage = errorText || `HTTP Error ${response.status}`;
+    const rawBody = await response.text();
+    let errorBody: unknown = rawBody;
     try {
-      const parsed = JSON.parse(errorText);
-      errorMessage = parsed.message || parsed.title || errorMessage;
-    } catch(ex) {
-      
+      errorBody = JSON.parse(rawBody);
+    } catch {
+      // ошибки не в формате json сохраняются как текст
     }
-    throw new ApiError(response.status, errorMessage);
+
+    const details = errorBody !== null && typeof errorBody === 'object' && !Array.isArray(errorBody)
+      ? errorBody as Record<string, unknown>
+      : {};
+    const validation = details.errors !== null && typeof details.errors === 'object' && !Array.isArray(details.errors)
+      ? details.errors as Record<string, unknown>
+      : details;
+    const fieldErrors: Record<string, string[]> = Object.fromEntries(
+      Object.entries(validation)
+        .filter(([, value]) => Array.isArray(value) && value.some((item) => typeof item === 'string'))
+        .map(([field, value]) => [field, (value as unknown[]).filter((item): item is string => typeof item === 'string')]),
+    );
+    const validationMessage = Object.values(fieldErrors).flat().join(' ');
+    const plainMessage = typeof errorBody === 'string' && !errorBody.trimStart().startsWith('<')
+      ? errorBody
+      : '';
+    const message = [details.message, validationMessage, details.detail, details.title, plainMessage]
+      .find((value): value is string => typeof value === 'string' && value.trim().length > 0);
+
+    throw new ApiError(
+      response.status,
+      message?.trim() || `HTTP Error ${response.status}`,
+      errorBody,
+      rawBody,
+      fieldErrors,
+    );
   }
 
   if (response.status === 204) {

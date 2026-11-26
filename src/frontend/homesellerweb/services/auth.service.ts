@@ -34,11 +34,15 @@ export const authService = {
     return res;
   },
 
-  async changePassword(data: ChangePasswordRequest): Promise<{ message: string }> {
-    return apiFetch<{ message: string }>(`${BASE_URL}/ChangePassword`, {
-      method: 'POST',
+  async changePassword(data: ChangePasswordRequest): Promise<LoginResponse> {
+    const res = await apiFetch<LoginResponse>(`${BASE_URL}/ChangePassword`, {
+      method: 'PUT',
       body: JSON.stringify(data),
     });
+    if (res.token) {
+      tokenStorage.set(res.token);
+    }
+    return res;
   },
 
   async deleteUser(userId: string): Promise<{ message: string }> {

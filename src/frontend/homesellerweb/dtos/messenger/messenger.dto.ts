@@ -48,6 +48,7 @@ export interface AttachmentResponse {
 export interface ReplyPreviewResponse {
   id: string;
   userId: string;
+  senderName?: string | null;
   text: string;
 }
 
@@ -55,6 +56,7 @@ export interface MessageResponse {
   id: string;
   chatId: string;
   userId: string;
+  senderName?: string | null;
   text: string;
   replyId?: string | null;
   reply?: ReplyPreviewResponse | null;
@@ -67,7 +69,9 @@ export interface ChatResponse {
   id: string;
   productId: string;
   userId1: string;
+  userName1?: string | null;
   userId2: string;
+  userName2?: string | null;
   createAt: string;
 }
 

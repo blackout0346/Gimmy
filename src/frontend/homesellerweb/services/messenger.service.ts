@@ -10,7 +10,7 @@ import {
 
 const MESSENGER_API_URL =
   process.env.NEXT_PUBLIC_MESSENGER_API_URL || 'http://localhost:5214';
-const BASE_ENDPOINT = `${MESSENGER_API_URL}/api/messenger`;
+const BASE_ENDPOINT = `${MESSENGER_API_URL}/api/Messenger`;
 
 export const messengerService = {
 
@@ -39,12 +39,12 @@ export const messengerService = {
       pageSize: pageSize.toString(),
     });
 
-    return apiFetch<ChatHistoryResponse>(
+    return apiFetch<Omit<ChatHistoryResponse, "messages"> & { messages: MessageResponse[] | null }>(
       `${BASE_ENDPOINT}/chats/${chatId}/messages?${params.toString()}`,
       {
         method: 'GET',
       }
-    );
+    ).then((history) => ({ ...history, messages: history.messages ?? [] }));
   },
 
 
