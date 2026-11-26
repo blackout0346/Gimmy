@@ -80,7 +80,7 @@ public class ProductController : ControllerBase
     }
     [HttpGet("GetProducts")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(ProductsResponse), 200)]
+    [ProducesResponseType(typeof(IEnumerable<ProductsResponse>), 200)]
     public async Task<IActionResult> GetAllProducts([FromQuery] string? search = null)
     {
         if (!ModelState.IsValid)

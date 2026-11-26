@@ -1,6 +1,7 @@
 ﻿using HomeSeller.Shared.CacheHelper;
 using HomeSeller.Shared.EventUser;
 using HomeSellerServer.DTO;
+using HomeSellerServer.Exceptions;
 using HomeSellerServer.Interface;
 using HomeSellerServer.Module;
 using MassTransit;
@@ -33,8 +34,8 @@ namespace HomeSellerServer.Services
             var exists = await _userStore.ExistsByLoginAsync(registerRequest.Login);
             if (exists)
             {
-                _logger.LogCritical("user already exists.");
-                throw new InvalidOperationException("Пользователь с таким логином уже существует.");
+                _logger.LogWarning("user already exists.");
+                throw new UserAlreadyExistsException();
             }
 
             var hashpassword = await _hashPassword.HashPasswordAsync(registerRequest.Password);

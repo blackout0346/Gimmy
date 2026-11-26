@@ -1,5 +1,6 @@
 ﻿using System.Security.Authentication;
 using HomeSellerServer.DTO;
+using HomeSellerServer.Exceptions;
 using HomeSellerServer.Module;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,6 +24,7 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     [ProducesResponseType( 200)]
     [ProducesResponseType( 400)]
+    [ProducesResponseType(409)]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         if (!ModelState.IsValid)
@@ -35,9 +37,13 @@ public class AuthController : ControllerBase
             var result = await _authService.RegisterAsync(request);
             return Ok(result);
         }
+        catch (UserAlreadyExistsException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
         catch (AuthenticationException ex)
         {
-            return BadRequest(ex);
+            return BadRequest(new {message = ex.Message});
         }
     }
 
