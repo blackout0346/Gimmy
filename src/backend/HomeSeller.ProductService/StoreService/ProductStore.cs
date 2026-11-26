@@ -19,30 +19,34 @@ public class ProductStore : IProductStore
         this._dbcontext = context;
     }
 
-    public async Task<IEnumerable<Products>> GetProducts(string? search = null)
+    public async Task<IEnumerable<Products>> GetProducts(
+        string? search = null, 
+        int page = 1, 
+        int pageSize = 20)
     {
+     
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
         var query = _dbcontext.Products
             .AsNoTracking()
             .Include(p => p.Condition)
             .Include(p => p.ImageURLs)
             .Include(p => p.ProductTags)
             .ThenInclude(pt => pt.Tag)
-
-        
             .AsQueryable();
-
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var searchTerm = $"%{search.Trim().ToLower()}%";
-            query = query.Where(p =>
-                EF.Functions.ILike(p.NameProduct, searchTerm));
+            var searchTerm = $"%{search.Trim()}%"; 
+            query = query.Where(p => EF.Functions.ILike(p.NameProduct, searchTerm));
         }
 
-        var afterquery = query
+        return await query
             .OrderBy(p => p.Id)
-            .Take(20);
-        return afterquery;
+            .Skip((page - 1) * pageSize) 
+            .Take(pageSize)             
+            .ToListAsync();
     }
 
     public async Task<Products?> GetProductsIdAsync(Guid id)

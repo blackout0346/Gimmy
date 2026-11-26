@@ -5,7 +5,10 @@ namespace ProductService.Interface;
 
 public interface IProductStore
 {
-    public Task<IEnumerable<Products>>  GetProducts(string? search=null);
+    public Task<IEnumerable<Products>> GetProducts(
+        string? search = null,
+        int page = 1,
+        int pageSize = 20);
     public Task<Products?> GetProductsIdAsync(Guid id);
     public Task<bool> DeleteProductAsync(Guid productId);
     public Task ProductsAddAsync(Products products);
