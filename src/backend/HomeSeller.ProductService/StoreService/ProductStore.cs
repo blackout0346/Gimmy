@@ -175,16 +175,34 @@ public class ProductStore : IProductStore
 
         if (products.ImageURLs != null)
         {
-            var newurl = products.ImageURLs.Select(img => img.ImageURL).ToHashSet();
-            var currenturl = existingProduct.ImageURLs.Select(img => img.ImageURL).ToHashSet();
-            var imagestoremove = existingProduct.ImageURLs.Where(img => !newurl.Contains(img.ImageURL)).ToList();
-            _dbcontext.Set<ProductImage>().RemoveRange(imagestoremove);
-            var imagestoadd = products.ImageURLs.Where(img => !currenturl.Contains(img.ImageURL)).ToList();
-            foreach (var img in imagestoadd)
+            var incomingImages = products.ImageURLs
+                .Where(img => !string.IsNullOrWhiteSpace(img.ImageURL))
+                .ToList();
+
+            var unusedImages = existingProduct.ImageURLs.ToList();
+
+            for (var index = 0; index < incomingImages.Count; index++)
             {
-                img.ProductId = existingProduct.Id;
-                _dbcontext.Set<ProductImage>().Add(img);
+                var incoming = incomingImages[index];
+
+                var existingImage = unusedImages.FirstOrDefault(
+                    img => img.ImageURL == incoming.ImageURL);
+
+                if (existingImage != null)
+                {
+                    existingImage.SortOrder = index;
+                    unusedImages.Remove(existingImage);
+                }
+                else
+                {
+                    incoming.ProductId = existingProduct.Id;
+                    incoming.SortOrder = index;
+
+                    _dbcontext.Set<ProductImage>().Add(incoming);
+                }
             }
+
+            _dbcontext.Set<ProductImage>().RemoveRange(unusedImages);
         }
 
         if (products.ProductTags != null)

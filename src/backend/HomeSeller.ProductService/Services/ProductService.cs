@@ -129,12 +129,16 @@ public class ProductService : IProductService
             SellerLogin = username,
             CreateAt = DateTime.UtcNow,
             Position = request.Position,
-            ImageURLs = request.ImageURLs?.Where(img => !string.IsNullOrWhiteSpace(img)).Select(img => new ProductImage
-            {
-                Id = Guid.NewGuid(),
-                ProductId = newProductId,
-                ImageURL = img.Trim()
-            }).ToList() ?? new List<ProductImage>(),
+            ImageURLs = request.ImageURLs?
+                .Where(img => !string.IsNullOrWhiteSpace(img))
+                .Select((img, index) => new ProductImage
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = newProductId,
+                    ImageURL = img.Trim(),
+                    SortOrder = index
+                })
+                .ToList() ?? new List<ProductImage>(),
 
             ProductTags = request.TagIds?.Select(tagId => new ProductTag
             {
@@ -440,7 +444,11 @@ public class ProductService : IProductService
         SellerLogin = products.SellerLogin,
         Description = products.Description,
         Price = products.Price,
-        ImageURLs = products.ImageURLs?.Select(img => img.ImageURL).ToList(),
+        ImageURLs = products.ImageURLs?
+            .OrderBy(img => img.SortOrder)
+            .ThenBy(img => img.Id)
+            .Select(img => img.ImageURL)
+            .ToList() ?? new List<string>(),
         NameProduct = products.NameProduct,
         ConditionId = products.ConditionId,
         NameCondition = products.Condition?.NameCondition ?? string.Empty,
