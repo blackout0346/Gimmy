@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ExternalLink, Send } from "lucide-react"
+import { ArrowDown, ArrowLeft, ExternalLink, MessageCircle, Send } from "lucide-react"
 import { cn } from "cn"
 import type { ChatResponse } from "@/dtos/messenger/messenger.dto"
 import { messengerService } from "@/services/messenger.service"
@@ -13,6 +13,8 @@ import { ApiError } from "@/lib/http"
 import { draftOwner, readMessageDraft, saveMessageDraft, clearSentMessageDraft } from "@/lib/drafts"
 import { routes } from "@/lib/routes"
 import { OPEN_CHAT_EVENT } from "@/lib/chat-navigation"
+import { MessageUnreadBadge } from "./messages-link"
+import { presentMessages } from "@/lib/message-groups"
 import { ProfileAvatar } from "@/components/profile/profile-avatar"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -57,6 +59,12 @@ export function MessagesPage() {
   const sendLock = useRef(false)
   const mounted = useRef(false)
   const bottom = useRef<HTMLDivElement>(null)
+  const historyViewport = useRef<HTMLDivElement>(null)
+  const followTail = useRef(true)
+  const scrollVersion = useRef(0)
+  const previousThread = useRef<{ id: string | null; lastId?: string }>({ id: null })
+  const olderLock = useRef(false)
+  const [newBelow, setNewBelow] = useState(false)
 
   useEffect(() => { activateChat.current = messenger.setActiveChat }, [messenger.setActiveChat])
   useEffect(() => { selectedRef.current = selectedId }, [selectedId])
@@ -67,12 +75,18 @@ export function MessagesPage() {
     setReady(true)
     function readLocation() {
       const id = new URLSearchParams(window.location.search).get("chatId")
+      followTail.current = true
+      setNewBelow(false)
+      if (id === selectedRef.current) scrollToLatest()
       selectedRef.current = id
       setSelectedId(id)
     }
     function openChat(event: Event) {
       const id = (event as CustomEvent<unknown>).detail
       if (typeof id !== "string" || !id) return
+      followTail.current = true
+      setNewBelow(false)
+      if (id === selectedRef.current) scrollToLatest()
       selectedRef.current = id
       setSelectedId(id)
     }
@@ -169,6 +183,7 @@ export function MessagesPage() {
   const selected = chats.find((chat) => chat.id === selectedId)
   const messages = selectedId ? messenger.messages[selectedId] : undefined
   const orderedMessages = [...(messages ?? [])].sort((a, b) => Date.parse(a.createAt) - Date.parse(b.createAt))
+  const displayedMessages = presentMessages(orderedMessages)
   const lastId = orderedMessages.at(-1)?.id
   const connected = messenger.connectionState === "Connected"
 
@@ -183,8 +198,19 @@ export function MessagesPage() {
     return () => { cancelled = true }
   }, [connected, selectedId, historyReady])
 
+  function scrollToLatest() {
+    followTail.current = true
+    setNewBelow(false)
+    if (historyViewport.current) historyViewport.current.scrollTop = historyViewport.current.scrollHeight
+    else bottom.current?.scrollIntoView({ block: "nearest" })
+  }
+
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: "nearest" })
+    const previous = previousThread.current
+    const changedChat = previous.id !== selectedId
+    if (changedChat || followTail.current) scrollToLatest()
+    else if (lastId && lastId !== previous.lastId) setNewBelow(true)
+    previousThread.current = { id: selectedId, lastId }
   }, [selectedId, lastId])
 
   function interlocutor(chat: ChatResponse) {
@@ -207,6 +233,9 @@ export function MessagesPage() {
     else params.delete("chatId")
     const suffix = params.toString()
     window.history.pushState(null, "", `${routes.messages}${suffix ? `?${suffix}` : ""}`)
+    followTail.current = true
+    setNewBelow(false)
+    if (chatId === selectedRef.current) scrollToLatest()
     selectedRef.current = chatId
     setSelectedId(chatId)
   }
@@ -217,6 +246,7 @@ export function MessagesPage() {
     if (!selectedId || !messages || !text || !connected || sendLock.current) return
     const chatId = selectedId
     sendLock.current = true
+    followTail.current = true
     setSendingChatId(chatId)
     setSendError("")
     try {
@@ -235,27 +265,40 @@ export function MessagesPage() {
   }
 
   async function loadOlder() {
-    if (!selectedId || messenger.isLoadingHistory) return
+    if (!selectedId || messenger.isLoadingHistory || olderLock.current) return
+    olderLock.current = true
+    const chatId = selectedId
+    const viewport = historyViewport.current
+    const height = viewport?.scrollHeight ?? 0
+    const top = viewport?.scrollTop ?? 0
+    const version = scrollVersion.current
     try {
       const page = Math.floor((messages?.length ?? 0) / 50) + 1
-      const hasMore = await messenger.loadMoreMessages(selectedId, page)
-      if (mounted.current && selectedRef.current === selectedId) setMoreAvailable(hasMore)
+      const hasMore = await messenger.loadMoreMessages(chatId, page)
+      if (mounted.current && selectedRef.current === chatId) {
+        setMoreAvailable(hasMore)
+        window.requestAnimationFrame(() => {
+          if (mounted.current && selectedRef.current === chatId && viewport && scrollVersion.current === version) viewport.scrollTop = top + viewport.scrollHeight - height
+        })
+      }
     } catch {
-      if (mounted.current && selectedRef.current === selectedId) setHistoryError("Не удалось загрузить предыдущие сообщения.")
-    }
+      if (mounted.current && selectedRef.current === chatId) setHistoryError("Не удалось загрузить предыдущие сообщения.")
+    } finally { olderLock.current = false }
   }
 
+  const mobileThread = Boolean(ready && session.token && !unauthorized && selectedId)
+
   return (
-    <div style={viewportHeight ? { "--messenger-viewport": `${viewportHeight}px` } as CSSProperties : undefined} className="flex min-h-[var(--messenger-viewport,100dvh)] flex-col bg-background pb-[calc(64px_+_env(safe-area-inset-bottom))] text-foreground md:min-h-dvh md:pb-0">
-      <SiteHeader authenticated={Boolean(session.token)} />
-      <main className="mx-auto flex min-h-0 w-full max-w-[1328px] flex-1 flex-col px-4 py-3 md:px-6 md:py-6">
-        <h1 className={cn("mb-5 text-2xl/8 font-bold", selectedId && "sr-only md:not-sr-only md:mb-5")}>Сообщения</h1>
+    <div style={viewportHeight ? { "--messenger-viewport": `${viewportHeight}px` } as CSSProperties : undefined} className={cn("flex min-h-[var(--messenger-viewport,100dvh)] flex-col bg-background text-foreground md:min-h-dvh md:pb-0", mobileThread ? "pb-0" : "pb-[calc(64px_+_env(safe-area-inset-bottom))]")}>
+      <div className={mobileThread ? "hidden md:block" : undefined}><SiteHeader authenticated={Boolean(session.token)} /></div>
+      <main className="mx-auto flex min-h-0 w-full max-w-[1328px] flex-1 flex-col px-4 py-3 md:px-6 md:py-8">
+        <h1 className={cn("mb-6 text-2xl/8 font-bold", mobileThread && "sr-only md:not-sr-only md:mb-6")}>Сообщения</h1>
         {!ready ? <p role="status">Загрузка…</p> : !session.token || unauthorized ? (
-          <EmptyState title="Войдите, чтобы открыть сообщения">
+          <EmptyState icon={<MessageCircle />} title="Войдите, чтобы открыть сообщения">
             <Link href={`${routes.login}?next=${encodeURIComponent(routes.messages + (selectedId ? `?chatId=${encodeURIComponent(selectedId)}` : ""))}`} className={buttonVariants()}>Войти</Link>
           </EmptyState>
         ) : (
-          <div className="grid min-h-0 gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
+          <div className="grid min-h-0 gap-4 md:gap-6 md:grid-cols-[260px_minmax(0,1fr)]">
             <section aria-label="Список чатов" className={cn("min-w-0 overflow-y-auto rounded-[12px] border border-border bg-card md:max-h-[650px]", selectedId && "hidden md:block")}>
               {loadingChats && <p role="status" className="p-4 text-sm text-muted-foreground">Загружаем чаты…</p>}
               {chatsError && <div role="alert" className="p-4 text-sm text-destructive">Не удалось загрузить чаты. <Button variant="text" size="sm" onClick={() => setRetry((value) => value + 1)}>Повторить</Button></div>}
@@ -272,13 +315,13 @@ export function MessagesPage() {
                 ))}
               </ul>
             </section>
-            <section aria-label="Переписка" className={cn("h-[calc(var(--messenger-viewport,100dvh)_-_148px_-_env(safe-area-inset-bottom))] min-h-0 min-w-0 flex-col overflow-hidden rounded-[12px] border border-border bg-card md:flex md:h-[650px] md:max-h-[75dvh]", selectedId ? "flex" : "hidden")}>
+            <section aria-label="Переписка" className={cn("h-[calc(var(--messenger-viewport,100dvh)_-_24px_-_env(safe-area-inset-bottom))] min-h-0 min-w-0 flex-col overflow-hidden rounded-[12px] border border-border bg-card md:flex md:h-[650px] md:max-h-[75dvh]", selectedId ? "flex" : "hidden")}>
               {!selectedId ? (
                 <div className="m-auto p-6 text-center text-sm text-muted-foreground">Выберите переписку или напишите продавцу на странице объявления.</div>
               ) : (
                 <>
                   <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-                    <Button type="button" variant="ghost" size="icon" className="md:hidden" aria-label="К списку чатов" onClick={() => chooseChat(null)}><ArrowLeft aria-hidden="true" /></Button>
+                    <Button type="button" variant="ghost" size="icon" className="md:hidden" aria-label="К списку чатов" onClick={() => chooseChat(null)}><ArrowLeft aria-hidden="true" /><MessageUnreadBadge announce={false} /></Button>
                     {selected && <ProfileAvatar userId={interlocutorId(selected)} name={interlocutor(selected)} className="size-8" />}
                     <h2 className="min-w-0 flex-1 truncate font-semibold">{selected ? interlocutor(selected) : "Переписка"}</h2>
                     {selected && <Link href={routes.product(selected.productId)} className={buttonVariants({ variant: "ghost", size: "icon" })} aria-label="Открыть объявление" title="Открыть объявление"><ExternalLink aria-hidden="true" /></Link>}
@@ -287,20 +330,27 @@ export function MessagesPage() {
                     {connected ? "Подключено" : "Подключение к сообщениям…"}
                     {!connected && <Button variant="text" size="sm" disabled={messenger.connectionState === "Connecting"} onClick={() => { void messenger.connect() }}>Подключиться</Button>}
                   </div>
-                  <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+                  <div ref={historyViewport} onScroll={(event) => {
+                    scrollVersion.current += 1
+                    const element = event.currentTarget
+                    followTail.current = element.scrollHeight - element.scrollTop - element.clientHeight < 64
+                    if (followTail.current) setNewBelow(false)
+                  }} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
                     {historyAttempted !== selectedId && <p role="status" className="text-sm text-muted-foreground">Загружаем историю…</p>}
                     {historyAttempted === selectedId && !messages && <div role="alert" className="text-sm text-destructive">Не удалось загрузить историю. <Button variant="text" size="sm" onClick={() => setHistoryRetry((value) => value + 1)}>Повторить</Button></div>}
                     {messages && moreAvailable && messages.length >= 50 && <Button variant="secondary" size="sm" loading={messenger.isLoadingHistory} onClick={() => { void loadOlder() }}>Ранее</Button>}
                     {historyError && <p role="alert" className="text-sm text-destructive">{historyError}</p>}
                     {messages && !messages.length && <p className="text-sm text-muted-foreground">Начните переписку с сообщения.</p>}
-                    <ol aria-label="Сообщения" className="space-y-3">
-                      {orderedMessages.map((message) => {
+                    <ol aria-label="Сообщения" className="space-y-1">
+                      {displayedMessages.map(({ message, startsGroup, dayLabel }) => {
                         const own = message.userId.toLowerCase() === session.userId?.toLowerCase()
                         return (
-                          <li key={message.id} className={cn("flex items-end gap-2", own ? "justify-end" : "justify-start")}>
-                            {!own && <ProfileAvatar userId={message.userId} name={message.senderName || (selected ? interlocutor(selected) : "Собеседник")} className="size-7" />}
+                          <li key={message.id} className={startsGroup && !dayLabel ? "pt-2" : undefined}>
+                            {dayLabel && <p className="pb-3 pt-4 text-center text-xs/4 font-medium text-muted-foreground">{dayLabel}</p>}
+                            <div className={cn("flex items-start gap-2", own ? "justify-end" : "justify-start")}>
+                            {!own && (startsGroup ? <ProfileAvatar userId={message.userId} name={message.senderName || (selected ? interlocutor(selected) : "Собеседник")} className="size-7" /> : <span aria-hidden="true" className="w-7 shrink-0" />)}
                             <div className={cn("max-w-[calc(100%_-_36px)] rounded-[10px] border border-border p-3 text-sm/5 [overflow-wrap:anywhere]", own ? "bg-primary-50" : "bg-muted")}>
-                            <p className="mb-1 text-xs font-medium text-muted-foreground">{own ? "Вы" : message.senderName || (selected ? interlocutor(selected) : "Собеседник")}</p>
+                            {startsGroup && <p className="mb-1 text-xs font-medium text-muted-foreground">{own ? "Вы" : message.senderName || (selected ? interlocutor(selected) : "Собеседник")}</p>}
                             {message.reply && <blockquote className="mb-2 border-l-2 border-primary pl-2 text-xs text-muted-foreground">{message.reply.text}</blockquote>}
                             {message.text && <p className="whitespace-pre-wrap">{message.text}</p>}
                             {(message.attachments ?? []).map((attachment) => {
@@ -309,13 +359,15 @@ export function MessagesPage() {
                             })}
                             {messageTime(message.createAt) && <time dateTime={message.createAt} className="mt-2 block text-right text-[11px]/4 text-muted-foreground">{messageTime(message.createAt)}</time>}
                             </div>
-                            {own && <ProfileAvatar userId={message.userId} name={session.login} className="size-7" />}
+                            {own && (startsGroup ? <ProfileAvatar userId={message.userId} name={session.login} className="size-7" /> : <span aria-hidden="true" className="w-7 shrink-0" />)}
+                            </div>
                           </li>
                         )
                       })}
                     </ol>
                     <div ref={bottom} />
                   </div>
+                  {newBelow && <Button type="button" variant="soft" size="sm" className="mx-3 my-2 min-h-11 shrink-0 self-center" onClick={scrollToLatest}><ArrowDown aria-hidden="true" />Новые сообщения</Button>}
                   <form onSubmit={submitMessage} className="shrink-0 border-t border-border p-3">
                     {sendError && <p role="alert" className="mb-2 text-sm text-destructive">{sendError}</p>}
                     {draftStorageError && <p role="status" className="mb-2 text-xs/4 text-muted-foreground">Не удалось сохранить черновик в браузере. Скопируйте текст перед уходом.</p>}
@@ -330,8 +382,8 @@ export function MessagesPage() {
           </div>
         )}
       </main>
-      <div className={selectedId ? "hidden md:block" : undefined}><SiteFooter /></div>
-      <MobileNavigation authenticated={Boolean(session.token)} active="messages" />
+      <div className={mobileThread ? "hidden md:block" : undefined}><SiteFooter /></div>
+      <div className={mobileThread ? "hidden md:block" : undefined}><MobileNavigation authenticated={Boolean(session.token)} active="messages" /></div>
     </div>
   )
 }

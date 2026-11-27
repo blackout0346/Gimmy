@@ -398,14 +398,14 @@ export function ProductForm() {
           </EmptyState>
         ) : (
           <>
-            <Breadcrumbs className="mb-5" items={[{ label: "Главная", href: routes.home }, { label: "Подать объявление" }]} />
+            <Breadcrumbs className="mb-6" items={[{ label: "Главная", href: routes.home }, { label: "Подать объявление" }]} />
             <h1 className="text-2xl/8 font-bold">Новое объявление</h1>
             {!draftReady && <p role="status" className="mt-3 text-sm text-muted-foreground">Восстанавливаем черновик…</p>}
             {draftNotice && <p role="status" className="mt-3 text-sm text-primary">{draftNotice}</p>}
             {(textDraftError || photoDraftError) && <p role="status" className="mt-3 text-sm/5 text-muted-foreground">{photoDraftError ? "Фотографии черновика не удалось сохранить или восстановить. При необходимости выберите их заново." : "Не удалось сохранить черновик в браузере. Сохраните введённый текст перед уходом со страницы."}</p>}
-            <form ref={formRef} onSubmit={submit} noValidate aria-busy={pending} className="mt-6 space-y-5">
-              <fieldset disabled={pending || Boolean(createdId) || !draftReady} className="min-w-0 space-y-5">
-                <section className="space-y-5 rounded-[12px] border border-border bg-card p-4 md:p-6">
+            <form ref={formRef} onSubmit={submit} noValidate aria-busy={pending} className="mt-6 space-y-6">
+              <fieldset disabled={pending || Boolean(createdId) || !draftReady} className="min-w-0 space-y-6">
+                <section className="space-y-6 rounded-[12px] border border-border bg-card p-4 md:p-6">
                   <h2 className="text-lg/6 font-semibold">Основное</h2>
                   <Field data-invalid={Boolean(fieldErrors.nameProduct)}>
                     <FieldLabel htmlFor="product-name">Название</FieldLabel>
@@ -415,7 +415,7 @@ export function ProductForm() {
                   {lookupLoading && <p role="status" className="text-sm text-muted-foreground">Загружаем категории и состояния…</p>}
                   {lookupError && <div role="alert" className="text-sm text-destructive">Не удалось загрузить справочники. <Button type="button" variant="text" size="sm" onClick={() => setLookupRetry((value) => value + 1)}>Повторить</Button></div>}
                   {!lookupLoading && !lookupError && (!tags.length || !conditions.length) && <p role="status" className="text-sm text-muted-foreground">Справочники категорий или состояний пока пусты.</p>}
-                  <div className="grid items-start gap-5 sm:grid-cols-2">
+                  <div className="grid items-start gap-6 sm:grid-cols-2">
                     <Field data-invalid={Boolean(fieldErrors.tagId)}>
                       <FieldLabel htmlFor="product-category">Категория</FieldLabel>
                       <Select id="product-category" name="tagId" data-field="tagId" required value={values.tagId} disabled={lookupLoading || !tags.length} onChange={(event) => updateField("tagId", event.target.value)} aria-invalid={Boolean(fieldErrors.tagId)} aria-describedby={fieldErrors.tagId ? "category-error" : undefined}>

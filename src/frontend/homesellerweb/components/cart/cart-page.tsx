@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { ShoppingCart, UserRound } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { cartService } from "@/services/cart.service"
 import { AUTH_CHANGE_EVENT, ApiError } from "@/lib/http"
@@ -173,12 +174,12 @@ export function CartPage() {
     <div className="flex min-h-dvh flex-col bg-background pb-[calc(64px_+_env(safe-area-inset-bottom))] text-foreground md:pb-0">
       <SiteHeader authenticated={Boolean(session.token)} />
       <main className="mx-auto w-full max-w-[1328px] flex-1 px-4 py-6 md:px-6 md:py-8">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl/8 font-bold">Корзина</h1>
           {ready && session.token && !unauthorized && <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => setRetry((value) => value + 1)}>Обновить</Button>}
         </div>
         {!ready ? <p role="status">Загрузка…</p> : !session.token || unauthorized ? (
-          <EmptyState title="Войдите, чтобы открыть корзину" description="Добавляйте товары, чтобы вернуться к ним позже.">
+          <EmptyState icon={<UserRound />} title="Войдите, чтобы открыть корзину" description="Добавляйте товары, чтобы вернуться к ним позже.">
             <Link href={`${routes.login}?next=${encodeURIComponent(routes.cart)}`} className={buttonVariants()}>Войти</Link>
           </EmptyState>
         ) : (
@@ -196,17 +197,17 @@ export function CartPage() {
                 <Button type="button" variant="secondary" onClick={() => setRetry((value) => value + 1)}>Повторить</Button>
               </EmptyState>
             ) : !items.length ? (
-              <EmptyState title="Корзина пока пуста" description="Добавьте товар со страницы объявления.">
+              <EmptyState icon={<ShoppingCart />} title="Корзина пока пуста" description="Добавьте товар со страницы объявления.">
                 <Link href={routes.home} className={buttonVariants()}>Смотреть объявления</Link>
               </EmptyState>
             ) : (
-              <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-                <ul className="min-w-0 space-y-3">
+              <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+                <ul className="min-w-0 space-y-4">
                   {items.map((line) => <li key={line.productId}>
                     <CartItem line={line} disabled={busy} removing={action?.kind === "remove" && action.id === line.productId} retrying={action?.kind === "retry" && action.id === line.productId} onRemove={() => { void mutate({ kind: "remove", id: line.productId }) }} onRetry={() => { void retryItem(line) }} />
                   </li>)}
                 </ul>
-                <aside aria-label="Состав корзины" className="space-y-4 rounded-[12px] border border-border bg-card p-4 md:p-5">
+                <aside aria-label="Состав корзины" className="space-y-4 rounded-[12px] border border-border bg-card p-4 md:p-6">
                   <h2 className="text-lg/6 font-semibold">В корзине</h2>
                   <p className="text-sm/5 text-muted-foreground">Позиций: {items.length} · Товаров: {summary.quantity}</p>
                   <div>

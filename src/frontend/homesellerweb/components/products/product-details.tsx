@@ -207,7 +207,7 @@ export function ProductDetails({ productId }: { productId: string }) {
   return (
     <div className="flex min-h-dvh flex-col bg-background pb-[calc(64px_+_env(safe-area-inset-bottom))] text-foreground md:pb-0">
       <SiteHeader authenticated={Boolean(session.token)} search={<SearchForm value={search} onValueChange={setSearch} onSubmit={submitSearch} />} />
-      <main className="mx-auto w-full max-w-[1328px] flex-1 px-4 py-6 md:px-6">
+      <main className="mx-auto w-full max-w-[1328px] flex-1 px-4 py-6 md:px-6 md:py-8">
         {loading ? (
           <div role="status" className="space-y-4">
             <span className="sr-only">Загружаем объявление</span>
@@ -227,11 +227,11 @@ export function ProductDetails({ productId }: { productId: string }) {
           </EmptyState>
         ) : (
           <>
-            <Breadcrumbs className="mb-5" items={[{ label: "Главная", href: routes.home }, { label: product.nameProduct || "Объявление" }]} />
+            <Breadcrumbs className="mb-6" items={[{ label: "Главная", href: routes.home }, { label: product.nameProduct || "Объявление" }]} />
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
               <ProductGallery key={product.id} images={images} title={product.nameProduct || "Объявление"} />
               <aside className="min-w-0 space-y-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
-                <section className="rounded-[12px] border border-border bg-card p-4 md:p-5">
+                <section className="rounded-[12px] border border-border bg-card p-4 md:p-6">
                   <h1 className="text-2xl/8 font-bold [overflow-wrap:anywhere]">{product.nameProduct || "Объявление"}</h1>
                   <p className="mt-2 text-[28px]/[36px] font-bold [overflow-wrap:anywhere]">{formatProductPrice(product.price)}</p>
                   {product.position && <p className="mt-3 flex items-start gap-2 text-sm/5 text-muted-foreground"><MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0" />{product.position}</p>}
@@ -246,7 +246,7 @@ export function ProductDetails({ productId }: { productId: string }) {
                   </Button>
                   {favoriteError && <div role="alert" className="mt-3 text-sm/5 text-destructive">{favoriteError} {!favoriteReady && <Button variant="text" size="sm" onClick={() => setFavoriteRetry((value) => value + 1)}>Повторить</Button>}</div>}
                 </section>
-                <section aria-label="Продавец" className="rounded-[12px] border border-border bg-card p-4 md:p-5">
+                <section aria-label="Продавец" className="rounded-[12px] border border-border bg-card p-4 md:p-6">
                   <div className="flex items-center gap-3">
                     <ProfileAvatar imageUrl={profilePhoto(seller)} name={sellerName} className="size-11" />
                     <div className="min-w-0"><h2 className="font-semibold [overflow-wrap:anywhere]">{sellerName}</h2>{sellerSince && <p className="text-xs/4 text-muted-foreground">На сайте с {sellerSince}</p>}</div>
@@ -256,11 +256,11 @@ export function ProductDetails({ productId }: { productId: string }) {
                 </section>
               </aside>
               <div className="min-w-0 space-y-4 lg:col-start-1">
-                <section className="rounded-[12px] border border-border bg-card p-4 md:p-5">
+                <section className="rounded-[12px] border border-border bg-card p-4 md:p-6">
                   <h2 className="text-lg/6 font-semibold">Описание</h2>
                   <p className="mt-3 whitespace-pre-wrap text-sm/6 [overflow-wrap:anywhere]">{product.description?.trim() || "Продавец не добавил описание."}</p>
                 </section>
-                <section className="rounded-[12px] border border-border bg-card p-4 md:p-5">
+                <section className="rounded-[12px] border border-border bg-card p-4 md:p-6">
                   <h2 className="text-lg/6 font-semibold">Характеристики</h2>
                   <dl className="mt-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm/5">
                     <dt className="text-muted-foreground">Состояние</dt><dd className="[overflow-wrap:anywhere]">{product.nameCondition || "Не указано"}</dd>

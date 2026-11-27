@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { Heart, UserRound } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import type { ProductsResponse } from "@/dtos/product/product.dto"
 import { favoriteService } from "@/services/favorite.service"
@@ -146,7 +147,7 @@ export function FavoritesPage() {
     <div className="flex min-h-dvh flex-col bg-background pb-[calc(64px_+_env(safe-area-inset-bottom))] text-foreground md:pb-0">
       <SiteHeader authenticated={Boolean(session.token)} />
       <main className="mx-auto w-full max-w-[1328px] flex-1 px-4 py-6 md:px-6 md:py-8">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl/8 font-bold">Избранное</h1>
           {ready && session.token && !unauthorized && (
             <Button type="button" size="sm" variant="secondary" disabled={loading || pendingId !== null} onClick={() => setRetry((value) => value + 1)}>Обновить</Button>
@@ -154,7 +155,7 @@ export function FavoritesPage() {
         </div>
 
         {!ready ? <p role="status" className="text-sm text-muted-foreground">Загрузка…</p> : !session.token || unauthorized ? (
-          <EmptyState title="Войдите, чтобы открыть избранное" description="Сохраняйте объявления, чтобы вернуться к ним позже.">
+          <EmptyState icon={<UserRound />} title="Войдите, чтобы открыть избранное" description="Сохраняйте объявления, чтобы вернуться к ним позже.">
             <Link href={`${routes.login}?next=${encodeURIComponent(routes.favorites)}`} className={buttonVariants()}>Войти</Link>
           </EmptyState>
         ) : (
@@ -164,7 +165,7 @@ export function FavoritesPage() {
             {loading ? (
               <div role="status">
                 <span className="sr-only">Загружаем избранное</span>
-                <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:grid-cols-3 md:gap-5 min-[1200px]:grid-cols-4 min-[1200px]:gap-6">
+                <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 md:grid-cols-3 md:gap-6 min-[1200px]:grid-cols-4 min-[1200px]:gap-6">
                   {Array.from({ length: 8 }, (_, index) => <ProductCardSkeleton key={index} />)}
                 </div>
               </div>
@@ -173,13 +174,13 @@ export function FavoritesPage() {
                 <Button type="button" variant="secondary" onClick={() => setRetry((value) => value + 1)}>Повторить</Button>
               </EmptyState>
             ) : !items.length ? (
-              <EmptyState title="В избранном пока пусто" description="Нажмите на сердечко в карточке объявления, чтобы сохранить его здесь.">
+              <EmptyState icon={<Heart />} title="В избранном пока пусто" description="Нажмите на сердечко в карточке объявления, чтобы сохранить его здесь.">
                 <Link href={routes.home} className={buttonVariants()}>Смотреть объявления</Link>
               </EmptyState>
             ) : (
               <>
                 <p className="mb-4 text-sm text-muted-foreground">Всего {items.length}</p>
-                <ul className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:grid-cols-3 md:gap-5 min-[1200px]:grid-cols-4 min-[1200px]:gap-6">
+                <ul className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 md:grid-cols-3 md:gap-6 min-[1200px]:grid-cols-4 min-[1200px]:gap-6">
                   {items.map((item) => (
                     <li key={item.id} className="min-w-0">
                       {item.state === "ready" ? (

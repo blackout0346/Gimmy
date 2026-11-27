@@ -6,7 +6,7 @@ export function HomeHero() {
   const [imageAvailable, setImageAvailable] = useState(true)
 
   return (
-    <section aria-labelledby="home-title" className="mx-auto mt-5 w-full max-w-[1328px] px-4 md:mt-7 md:px-6">
+    <section aria-labelledby="home-title" className="mx-auto mt-6 w-full max-w-[1328px] px-4 md:mt-8 md:px-6">
       <div className="grid items-center gap-8 rounded-[16px] bg-primary-50 p-6 md:grid-cols-2 md:p-8 min-[1200px]:gap-12 min-[1200px]:pl-12">
         <div className={imageAvailable ? "" : "md:col-span-2"}>
           <h1 id="home-title" className="text-[30px]/[36px] font-bold [overflow-wrap:anywhere] min-[1200px]:text-[48px]/[54px]">

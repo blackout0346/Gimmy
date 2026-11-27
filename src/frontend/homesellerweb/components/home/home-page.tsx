@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { Search } from "lucide-react"
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import type { ConditionResponse, ProductsResponse, TagResponse } from "@/dtos/product/product.dto"
 import { tokenStorage, ApiError } from "@/lib/http"
@@ -321,8 +322,8 @@ export function HomePage() {
       <main className="flex-1">
         {!catalogMode && <HomeHero />}
 
-        <section aria-labelledby="catalog-title" className="mx-auto w-full max-w-[1328px] px-4 md:px-6 pt-5 pb-8 md:pt-6 md:pb-12">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 md:mb-5">
+        <section aria-labelledby="catalog-title" className="mx-auto w-full max-w-[1328px] px-4 md:px-6 pt-6 pb-8 md:pt-8 md:pb-12">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 md:mb-6">
             <h2 ref={catalogRef} tabIndex={-1} id="catalog-title" className="min-w-0 scroll-mt-5 text-[22px]/[28px] font-bold outline-none [overflow-wrap:anywhere] md:text-2xl/8">{query ? `Результаты поиска «${query}»` : category || (catalogMode ? "Объявления" : "Свежие объявления")}</h2>
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <Button type="button" variant={activeFilters || filtersOpen ? "soft" : "secondary"} aria-expanded={filtersOpen} aria-controls="catalog-filters" onClick={() => setFiltersOpen((value) => !value)}>Фильтры</Button>
@@ -337,7 +338,7 @@ export function HomePage() {
           {filterSummary && <p className="mb-3 text-sm/5 text-muted-foreground [overflow-wrap:anywhere]">{filterSummary}</p>}
           {catalogMode && <Button type="button" variant="text" size="sm" className="mb-4" onClick={resetAll}>Сбросить фильтры</Button>}
           <div className={cn(filtersOpen && "lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-6")}>
-            <aside id="catalog-filters" hidden={!filtersOpen} className="mb-5 lg:mb-0">
+            <aside id="catalog-filters" hidden={!filtersOpen} className="mb-6 lg:mb-0">
               <CatalogFilters
                 key={filterKey}
                 value={filters}
@@ -351,13 +352,13 @@ export function HomePage() {
             </aside>
             <div className="min-w-0">
                 {loginRequired && (
-                  <div role="status" className="mb-5 flex flex-wrap items-center gap-3 rounded-[10px] border border-border bg-card p-4 text-sm/5">
+                  <div role="status" className="mb-6 flex flex-wrap items-center gap-3 rounded-[10px] border border-border bg-card p-4 text-sm/5">
                     <p>Войдите, чтобы сохранять объявления в избранное.</p>
                     <Link href={loginHref} prefetch={false} className={buttonVariants({ variant: "soft", size: "sm" })}>Войти</Link>
                   </div>
                 )}
                 {favoriteError && (
-                  <div role="alert" className="mb-5 flex flex-wrap items-center gap-3 rounded-[10px] border border-destructive bg-error-bg text-destructive p-4 text-sm/5">
+                  <div role="alert" className="mb-6 flex flex-wrap items-center gap-3 rounded-[10px] border border-destructive bg-error-bg text-destructive p-4 text-sm/5">
                     <p>{favoriteError}</p>
                     {!favoritesReady && <Button variant="secondary" size="sm" onClick={() => setFavoriteRetry((value) => value + 1)}>Повторить</Button>}
                   </div>
@@ -367,7 +368,7 @@ export function HomePage() {
                   {loading ? (
                     <>
                       <p role="status" className="sr-only">Загружаем объявления</p>
-                      <div className={cn("grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:gap-5 min-[1200px]:gap-6 [&>li]:min-w-0", filtersOpen ? "md:grid-cols-3 lg:grid-cols-2 min-[1200px]:grid-cols-3" : "md:grid-cols-3 min-[1200px]:grid-cols-4")}>
+                      <div className={cn("grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 md:gap-6 min-[1200px]:gap-6 [&>li]:min-w-0", filtersOpen ? "md:grid-cols-3 lg:grid-cols-2 min-[1200px]:grid-cols-3" : "md:grid-cols-3 min-[1200px]:grid-cols-4")}>
                         {Array.from({ length: 8 }, (_, index) => <ProductCardSkeleton key={index} />)}
                       </div>
                     </>
@@ -378,7 +379,7 @@ export function HomePage() {
                   ) : products.length ? (
                     <>
                       <p className="sr-only" role="status">На странице объявлений: {products.length}</p>
-                      <ul className={cn("grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:gap-5 min-[1200px]:gap-6 [&>li]:min-w-0", filtersOpen ? "md:grid-cols-3 lg:grid-cols-2 min-[1200px]:grid-cols-3" : "md:grid-cols-3 min-[1200px]:grid-cols-4")}>
+                      <ul className={cn("grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 md:gap-6 min-[1200px]:gap-6 [&>li]:min-w-0", filtersOpen ? "md:grid-cols-3 lg:grid-cols-2 min-[1200px]:grid-cols-3" : "md:grid-cols-3 min-[1200px]:grid-cols-4")}>
                         {products.map((product) => (
                           <li key={product.id}>
                             <ProductCard
@@ -393,7 +394,7 @@ export function HomePage() {
                       </ul>
                     </>
                   ) : (
-                    <EmptyState
+                    <EmptyState icon={<Search />}
                       title={filters.page > 1 ? "На этой странице нет объявлений" : query || category || activeFilters ? "Объявления не найдены" : "Пока нет объявлений"}
                       description={filters.page > 1 ? "Вернитесь на предыдущую страницу." : query || category || activeFilters ? "Попробуйте изменить запрос или параметры фильтров." : "Здесь появятся новые объявления."}
                     >

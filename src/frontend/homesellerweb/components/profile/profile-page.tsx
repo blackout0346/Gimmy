@@ -23,7 +23,9 @@ import { SiteFooter } from "@/components/layout/site-footer"
 import { MobileNavigation } from "@/components/layout/mobile-navigation"
 import { MyProductRow } from "./my-product-row"
 import { ProfileAvatar } from "./profile-avatar"
-import { profilePhoto } from "@/lib/profile-images"
+import { ProfilePhotoEditor } from "./profile-photo-editor"
+import { UserRound, Plus } from "lucide-react"
+import { profilePhoto, publishAvatarProfile } from "@/lib/profile-images"
 
 type ProfileValues = { name: string; description: string; phoneNumber: string }
 type ProfileErrors = Partial<Record<keyof ProfileValues, string>>
@@ -42,6 +44,7 @@ export function ProfilePage() {
   const [values, setValues] = useState<ProfileValues>({ name: "", description: "", phoneNumber: "" })
   const [fieldErrors, setFieldErrors] = useState<ProfileErrors>({})
   const [saving, setSaving] = useState(false)
+  const [photoBusy, setPhotoBusy] = useState(false)
   const [saveError, setSaveError] = useState("")
   const [notice, setNotice] = useState("")
   const [products, setProducts] = useState<OwnProduct[]>([])
@@ -162,7 +165,7 @@ export function ProfilePage() {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (saveLock.current || linking || deleteLock.current || refreshLock.current) return
+    if (saveLock.current || linking || deleteLock.current || refreshLock.current || photoBusy) return
     const errors: ProfileErrors = {}
     if (!values.name.trim()) errors.name = "Введите имя."
     else if (values.name.trim().length > 100) errors.name = "Имя должно быть не длиннее 100 символов."
@@ -181,7 +184,9 @@ export function ProfilePage() {
       const request: ProfileRequest = { name: values.name.trim(), description: values.description.trim() || null, phoneNumber: values.phoneNumber.trim() || null }
       const result = profile ? await profileService.updateMyProfile(request) : await profileService.createProfile(request)
       if (!mounted.current) return
-      setProfile((current) => ({ ...result, productUsers: result.productUsers ?? current?.productUsers ?? [] }))
+      const updated = { ...result, productUsers: result.productUsers ?? profile?.productUsers ?? [], imageURLs: result.imageURLs ?? profile?.imageURLs ?? [] }
+      setProfile(updated)
+      publishAvatarProfile(updated)
       setValues({ name: result.name ?? request.name, description: result.description ?? "", phoneNumber: result.phoneNumber ?? "" })
       setNotice("Профиль сохранён.")
     } catch (error) {
@@ -195,7 +200,7 @@ export function ProfilePage() {
   }
 
   async function refreshProducts() {
-    if (refreshLock.current || deleteLock.current || saveLock.current) return
+    if (refreshLock.current || deleteLock.current || saveLock.current || photoBusy) return
     refreshLock.current = true
     setRefreshing(true)
     setProductsError("")
@@ -214,7 +219,7 @@ export function ProfilePage() {
   }
 
   async function deleteProduct(id: string) {
-    if (deleteLock.current || saveLock.current || refreshLock.current) return
+    if (deleteLock.current || saveLock.current || refreshLock.current || photoBusy) return
     deleteLock.current = true
     setDeleting(id)
     setDeleteError("")
@@ -242,7 +247,7 @@ export function ProfilePage() {
     catch { setSaveError("Не удалось завершить выход. Попробуйте ещё раз.") }
   }
 
-  const busy = saving || linking || deleting !== null || refreshing
+  const busy = saving || linking || deleting !== null || refreshing || photoBusy
   const name = profile?.name?.trim() || session.login || "Мой профиль"
   const loginTarget = routes.profile + (pendingProductId ? `?productId=${encodeURIComponent(pendingProductId)}` : "")
 
@@ -251,7 +256,7 @@ export function ProfilePage() {
       <SiteHeader authenticated={Boolean(session.token)} />
       <main className="mx-auto w-full max-w-[1328px] flex-1 px-4 py-6 md:px-6 md:py-8">
         {!ready ? <p role="status">Загрузка…</p> : !session.token || unauthorized ? (
-          <EmptyState title="Войдите, чтобы открыть профиль">
+          <EmptyState icon={<UserRound />} title="Войдите, чтобы открыть профиль">
             <Link href={`${routes.login}?next=${encodeURIComponent(loginTarget)}`} className={buttonVariants()}>Войти</Link>
           </EmptyState>
         ) : loading ? <p role="status" className="text-sm text-muted-foreground">Загружаем профиль…</p> : loadError ? (
@@ -261,9 +266,9 @@ export function ProfilePage() {
         ) : (
           <div className="grid items-start gap-6 md:grid-cols-[240px_minmax(0,1fr)]">
             <aside className="rounded-[12px] border border-border bg-card p-4">
-              <div className="mb-4 flex items-center gap-3">
-                <ProfileAvatar imageUrl={profilePhoto(profile)} name={name} className="size-11" />
-                <p className="min-w-0 font-semibold [overflow-wrap:anywhere]">{name}</p>
+              <div className="mb-6 flex items-center gap-4 md:flex-col md:items-start">
+                <ProfileAvatar imageUrl={profilePhoto(profile)} name={name} className="size-20 text-2xl" />
+                <div className="min-w-0"><p className="text-lg/6 font-semibold [overflow-wrap:anywhere]">{name}</p><p className="mt-1 text-xs/5 text-muted-foreground">Личный профиль</p></div>
               </div>
               <nav aria-label="Разделы профиля" className="grid gap-1">
                 {(["products", "settings"] as const).map((value) => (
@@ -275,7 +280,7 @@ export function ProfilePage() {
               </nav>
             </aside>
             <div className="min-w-0">
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                 <h1 className="text-2xl/8 font-bold">{tab === "products" ? "Мои объявления" : profile ? "Настройки профиля" : "Заполните профиль"}</h1>
                 {tab === "products" && <Link href={routes.create} className={buttonVariants()}>Подать объявление</Link>}
               </div>
@@ -290,6 +295,8 @@ export function ProfilePage() {
                 </div>
               </div>}
               {tab === "settings" ? (
+                <div className="max-w-2xl space-y-6">
+                {profile ? <ProfilePhotoEditor profile={profile} disabled={busy && !photoBusy} onChange={setProfile} onBusyChange={setPhotoBusy} onUnauthorized={() => setUnauthorized(true)} /> : <p className="text-sm/5 text-muted-foreground">Фотографию можно добавить после сохранения профиля.</p>}
                 <form ref={formRef} noValidate onSubmit={save} aria-busy={saving} className="max-w-2xl space-y-4 rounded-[12px] border border-border bg-card p-4 md:p-6">
                   <fieldset disabled={busy} className="min-w-0 space-y-4">
                     <Field>
@@ -310,15 +317,16 @@ export function ProfilePage() {
                   </fieldset>
                   <Button type="submit" loading={saving} disabled={busy && !saving}>{profile ? "Сохранить изменения" : "Создать профиль"}</Button>
                 </form>
+                </div>
               ) : (
                 <section aria-label="Мои объявления">
                   <Button type="button" size="sm" variant="secondary" disabled={busy || productsLoading} onClick={() => { void refreshProducts() }} className="mb-4">Обновить список</Button>
                   {productsError && <p role="alert" className="mb-4 text-sm text-destructive">{productsError}</p>}
                   {deleteError && <p role="alert" className="mb-4 text-sm text-destructive">{deleteError}</p>}
                   {productsLoading ? <p role="status" className="text-sm text-muted-foreground">Загружаем объявления…</p> : !products.length ? (
-                    <EmptyState title="У вас пока нет объявлений"><Link href={routes.create} className={buttonVariants()}>Подать объявление</Link></EmptyState>
+                    <EmptyState icon={<Plus />} title="У вас пока нет объявлений"><Link href={routes.create} className={buttonVariants()}>Подать объявление</Link></EmptyState>
                   ) : (
-                    <ul className="space-y-3">
+                    <ul className="space-y-4">
                       {products.map((item) => (
                         <li key={item.id}>
                           {item.product ? <MyProductRow product={item.product}>

@@ -39,7 +39,7 @@ export function ContactSellerButton({ product, disabled = false }: { product: Pr
     } finally { lock.current = false; if (mounted.current) setPending(false) }
   }
   return <div className="w-full">
-    <Button type="button" size="sm" className="min-h-11 w-full" loading={pending} disabled={disabled} onClick={() => { void contact() }}><span className="whitespace-normal">Обсудить покупку</span></Button>
+    <Button type="button" variant="soft" size="sm" className="min-h-11 w-full" loading={pending} disabled={disabled} onClick={() => { void contact() }}><span className="whitespace-normal">Обсудить покупку</span></Button>
     {error && <p role="alert" className="mt-2 text-xs/5 text-destructive">{error}</p>}
   </div>
 }

@@ -40,3 +40,14 @@ export function ownAvatarProfile(): Promise<ProfileResponse | null> {
   own = { token, expires: Date.now() + 60000, promise }
   return promise
 }
+
+export const PROFILE_IMAGE_UPDATED = "gimmy:profile-image-updated"
+export function publishAvatarProfile(profile: ProfileResponse): void {
+  const entry = { expires: Date.now() + 60000, promise: Promise.resolve(profile) }
+  profiles.set(profile.userId.toLowerCase(), entry)
+  try {
+    const token = tokenStorage.get()
+    if (token) own = { ...entry, token }
+  } catch { /* The profile view still updates when storage is unavailable. */ }
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(PROFILE_IMAGE_UPDATED, { detail: profile.userId }))
+}
