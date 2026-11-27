@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ExternalLink, MessageCircle, Send } from "lucide-react"
+import { ArrowLeft, ExternalLink, Send } from "lucide-react"
 import { cn } from "cn"
 import type { ChatResponse } from "@/dtos/messenger/messenger.dto"
 import { messengerService } from "@/services/messenger.service"
@@ -12,6 +12,8 @@ import { readSession, type Session } from "@/lib/session"
 import { ApiError } from "@/lib/http"
 import { draftOwner, readMessageDraft, saveMessageDraft, clearSentMessageDraft } from "@/lib/drafts"
 import { routes } from "@/lib/routes"
+import { OPEN_CHAT_EVENT } from "@/lib/chat-navigation"
+import { ProfileAvatar } from "@/components/profile/profile-avatar"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -64,13 +66,23 @@ export function MessagesPage() {
     setSession(readSession())
     setReady(true)
     function readLocation() {
-      setSelectedId(new URLSearchParams(window.location.search).get("chatId"))
+      const id = new URLSearchParams(window.location.search).get("chatId")
+      selectedRef.current = id
+      setSelectedId(id)
+    }
+    function openChat(event: Event) {
+      const id = (event as CustomEvent<unknown>).detail
+      if (typeof id !== "string" || !id) return
+      selectedRef.current = id
+      setSelectedId(id)
     }
     readLocation()
     window.addEventListener("popstate", readLocation)
+    window.addEventListener(OPEN_CHAT_EVENT, openChat)
     return () => {
       mounted.current = false
       window.removeEventListener("popstate", readLocation)
+      window.removeEventListener(OPEN_CHAT_EVENT, openChat)
     }
   }, [])
 
@@ -93,7 +105,8 @@ export function MessagesPage() {
   }, [ready, session.token, retry])
 
   useEffect(() => {
-    if (!ready || !session.token || !selectedId) return
+    if (!ready || !session.token) return
+    if (!selectedId) { void activateChat.current(null); return }
     let cancelled = false
     setHistoryAttempted(null)
     setHistoryError("")
@@ -107,7 +120,7 @@ export function MessagesPage() {
       }
     }
     void activate()
-    return () => { cancelled = true }
+    return () => { cancelled = true; void activateChat.current(null) }
   }, [ready, session.token, selectedId, historyRetry])
 
   const owner = draftOwner(session)
@@ -148,8 +161,11 @@ export function MessagesPage() {
     setDraftStorageError(Boolean(value) && (!owner || !selectedId || !saveMessageDraft(owner, selectedId, value)))
   }
 
+  const latestMessages = new Map(Object.entries(messenger.messages).map(([id, history]) => [
+    id, [...history].sort((a, b) => Date.parse(a.createAt) - Date.parse(b.createAt)).at(-1),
+  ] as const))
   const chats = [...new Map([...initialChats, ...messenger.chats].map((chat) => [chat.id, chat] as const)).values()]
-    .sort((a, b) => Date.parse(b.createAt) - Date.parse(a.createAt))
+    .sort((a, b) => (Date.parse(latestMessages.get(b.id)?.createAt || b.createAt) || 0) - (Date.parse(latestMessages.get(a.id)?.createAt || a.createAt) || 0))
   const selected = chats.find((chat) => chat.id === selectedId)
   const messages = selectedId ? messenger.messages[selectedId] : undefined
   const orderedMessages = [...(messages ?? [])].sort((a, b) => Date.parse(a.createAt) - Date.parse(b.createAt))
@@ -175,6 +191,14 @@ export function MessagesPage() {
     return chat.userId1.toLowerCase() === session.userId?.toLowerCase()
       ? chat.userName2 || "Собеседник"
       : chat.userName1 || "Собеседник"
+  }
+
+  function interlocutorId(chat: ChatResponse) {
+    return chat.userId1.toLowerCase() === session.userId?.toLowerCase() ? chat.userId2 : chat.userId1
+  }
+  function messageTime(value: string) {
+    const date = new Date(value)
+    return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(date) : ""
   }
 
   function chooseChat(chatId: string | null) {
@@ -240,8 +264,9 @@ export function MessagesPage() {
                 {chats.map((chat) => (
                   <li key={chat.id}>
                     <button type="button" aria-pressed={selectedId === chat.id} onClick={() => chooseChat(chat.id)} className="flex w-full items-center gap-3 border-b border-border p-4 text-left hover:bg-muted aria-pressed:bg-primary-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
-                      <MessageCircle aria-hidden="true" className="size-5 shrink-0 text-primary" />
-                      <span className="min-w-0"><span className="block truncate text-sm font-semibold">{interlocutor(chat)}</span><span className="block text-xs/4 text-muted-foreground">Переписка по объявлению</span></span>
+                      <ProfileAvatar userId={interlocutorId(chat)} name={interlocutor(chat)} />
+                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{interlocutor(chat)}</span><span className="mt-1 block truncate text-xs/4 text-muted-foreground">{latestMessages.get(chat.id)?.text?.trim() || (latestMessages.get(chat.id)?.attachments?.length ? "Вложение" : "Переписка по объявлению")}</span></span>
+                      {(messenger.unreadChatIds ?? []).includes(chat.id) && <span className="size-2 shrink-0 rounded-full bg-primary"><span className="sr-only">Есть новые сообщения</span></span>}
                     </button>
                   </li>
                 ))}
@@ -254,6 +279,7 @@ export function MessagesPage() {
                 <>
                   <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
                     <Button type="button" variant="ghost" size="icon" className="md:hidden" aria-label="К списку чатов" onClick={() => chooseChat(null)}><ArrowLeft aria-hidden="true" /></Button>
+                    {selected && <ProfileAvatar userId={interlocutorId(selected)} name={interlocutor(selected)} className="size-8" />}
                     <h2 className="min-w-0 flex-1 truncate font-semibold">{selected ? interlocutor(selected) : "Переписка"}</h2>
                     {selected && <Link href={routes.product(selected.productId)} className={buttonVariants({ variant: "ghost", size: "icon" })} aria-label="Открыть объявление" title="Открыть объявление"><ExternalLink aria-hidden="true" /></Link>}
                   </div>
@@ -271,7 +297,9 @@ export function MessagesPage() {
                       {orderedMessages.map((message) => {
                         const own = message.userId.toLowerCase() === session.userId?.toLowerCase()
                         return (
-                          <li key={message.id} className={cn("w-fit max-w-[90%] rounded-[10px] border border-border p-3 text-sm/5 [overflow-wrap:anywhere]", own ? "ml-auto bg-primary-50" : "bg-muted")}>
+                          <li key={message.id} className={cn("flex items-end gap-2", own ? "justify-end" : "justify-start")}>
+                            {!own && <ProfileAvatar userId={message.userId} name={message.senderName || (selected ? interlocutor(selected) : "Собеседник")} className="size-7" />}
+                            <div className={cn("max-w-[calc(100%_-_36px)] rounded-[10px] border border-border p-3 text-sm/5 [overflow-wrap:anywhere]", own ? "bg-primary-50" : "bg-muted")}>
                             <p className="mb-1 text-xs font-medium text-muted-foreground">{own ? "Вы" : message.senderName || (selected ? interlocutor(selected) : "Собеседник")}</p>
                             {message.reply && <blockquote className="mb-2 border-l-2 border-primary pl-2 text-xs text-muted-foreground">{message.reply.text}</blockquote>}
                             {message.text && <p className="whitespace-pre-wrap">{message.text}</p>}
@@ -279,6 +307,9 @@ export function MessagesPage() {
                               const href = attachment.fileUrl ? attachmentHref(attachment.fileUrl) : undefined
                               return href && <a key={attachment.id} href={href} target="_blank" rel="noopener noreferrer" className="mt-1 block text-primary underline">{attachment.fileName || "Вложение"}</a>
                             })}
+                            {messageTime(message.createAt) && <time dateTime={message.createAt} className="mt-2 block text-right text-[11px]/4 text-muted-foreground">{messageTime(message.createAt)}</time>}
+                            </div>
+                            {own && <ProfileAvatar userId={message.userId} name={session.login} className="size-7" />}
                           </li>
                         )
                       })}

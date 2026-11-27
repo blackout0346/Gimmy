@@ -24,6 +24,8 @@ import { formatProductDate, formatProductPrice, productImageUrl } from "@/compon
 import { ProductGallery } from "./product-gallery"
 import { ContactActions } from "./contact-actions"
 import { AddToCartButton } from "./add-to-cart-button"
+import { ProfileAvatar } from "@/components/profile/profile-avatar"
+import { profilePhoto } from "@/lib/profile-images"
 
 type SellerProfile = ProfileResponse & { name?: string | null }
 
@@ -246,7 +248,7 @@ export function ProductDetails({ productId }: { productId: string }) {
                 </section>
                 <section aria-label="Продавец" className="rounded-[12px] border border-border bg-card p-4 md:p-5">
                   <div className="flex items-center gap-3">
-                    <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-primary-50 font-semibold text-primary">{sellerName.slice(0, 1).toLocaleUpperCase("ru")}</span>
+                    <ProfileAvatar imageUrl={profilePhoto(seller)} name={sellerName} className="size-11" />
                     <div className="min-w-0"><h2 className="font-semibold [overflow-wrap:anywhere]">{sellerName}</h2>{sellerSince && <p className="text-xs/4 text-muted-foreground">На сайте с {sellerSince}</p>}</div>
                   </div>
                   {seller?.description && <p className="mt-3 whitespace-pre-wrap text-sm/5 [overflow-wrap:anywhere]">{seller.description}</p>}

@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { AUTH_CHANGE_EVENT, tokenStorage } from "@/lib/http"
 import { MessengerProvider } from "@/providers/MessengerProvider"
+import { MessageNotificationBridge } from "@/components/notifications/message-notification-bridge"
 import { NotificationProvider } from "@/providers/NotificationProvider"
 
 export function AppProviders({ children }: { children: ReactNode }) {
@@ -31,6 +32,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <NotificationProvider key={token ?? "guest"}>
       <MessengerProvider isAuthenticated={Boolean(token)}>
+        <MessageNotificationBridge />
         {children}
       </MessengerProvider>
     </NotificationProvider>

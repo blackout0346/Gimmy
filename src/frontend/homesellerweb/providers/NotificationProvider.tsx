@@ -12,6 +12,7 @@ import * as signalR from '@microsoft/signalr';
 import { NotificationDto } from '@/dtos/notification/notification.dto';
 import { tokenStorage } from '@/lib/http';
 import { normalizeNotification, notificationKey } from '@/lib/notifications';
+import type { NotificationTarget } from '@/lib/notification-target';
 
 function readToken() {
   try { return tokenStorage.get(); } catch { return null; }
@@ -28,6 +29,9 @@ interface NotificationContextValue {
   connectionStatus: ConnectionStatus;
   unreadCount: number;
   markAllRead: () => void;
+  targets: Record<string, NotificationTarget>;
+  setNotificationTarget: (key: string, target: NotificationTarget) => void;
+  markNotificationRead: (key: string) => void;
   connectNotifications: () => Promise<void>;
   clearNotifications: () => void;
 }
@@ -38,6 +42,9 @@ const NotificationContext = createContext<NotificationContextValue>({
   connectionStatus: 'disconnected',
   unreadCount: 0,
   markAllRead: () => {},
+  targets: {},
+  setNotificationTarget: () => {},
+  markNotificationRead: () => {},
   connectNotifications: async () => {},
   clearNotifications: () => {},
 });
@@ -53,6 +60,11 @@ export function NotificationProvider({
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [readKeys, setReadKeys] = useState<Set<string>>(new Set());
+  const [targets, setTargets] = useState<Record<string, NotificationTarget>>({});
+  const setNotificationTarget = useCallback((key: string, target: NotificationTarget) => {
+    setTargets((current) => current[key] === target ? current : { ...current, [key]: target });
+  }, []);
+  const markNotificationRead = useCallback((key: string) => setReadKeys((current) => new Set([...current, key])), []);
   const mounted = useRef(false);
   const lifecycle = useRef(0);
   const connectLock = useRef(false);
@@ -180,9 +192,9 @@ export function NotificationProvider({
     };
   }, [connectNotifications, stopConnectionSafely]);
 
-  const unreadCount = notifications.filter((item) => !readKeys.has(notificationKey(item))).length;
+  const unreadCount = notifications.filter((item) => !readKeys.has(notificationKey(item)) && targets[notificationKey(item)]?.kind !== 'message').length;
   const markAllRead = () => setReadKeys(new Set(notifications.map(notificationKey)));
-  const clearNotifications = () => { setNotifications([]); setReadKeys(new Set()); };
+  const clearNotifications = () => { setNotifications([]); setReadKeys(new Set()); setTargets({}); };
 
   return (
     <NotificationContext.Provider
@@ -192,6 +204,9 @@ export function NotificationProvider({
         connectionStatus,
         unreadCount,
         markAllRead,
+        targets,
+        setNotificationTarget,
+        markNotificationRead,
         connectNotifications,
         clearNotifications,
       }}

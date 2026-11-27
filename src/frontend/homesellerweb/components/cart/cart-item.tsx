@@ -7,6 +7,7 @@ import { routes } from "@/lib/routes"
 import { productImageUrl } from "@/components/home/product-display"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { formatCartMoney, type CartLine } from "./cart-data"
+import { ContactSellerButton } from "@/components/products/contact-seller-button"
 
 type CartItemProps = {
   line: CartLine
@@ -49,6 +50,7 @@ export function CartItem({ line, disabled, removing, retrying, onRemove, onRetry
         </div>
       )}
       <div className="flex shrink-0 flex-wrap gap-2 min-[560px]:max-w-40 min-[560px]:justify-end">
+        {product && <ContactSellerButton product={product} disabled={disabled} />}
         {line.state === "error" && <Button type="button" variant="secondary" size="sm" disabled={disabled} loading={retrying} onClick={onRetry}>Повторить</Button>}
         {line.state === "error" && <Link href={routes.product(line.productId)} className={buttonVariants({ variant: "text", size: "sm" })}>Открыть</Link>}
         <Button type="button" variant="text" size="sm" disabled={disabled} loading={removing} onClick={onRemove} aria-label={`Убрать из корзины: ${product?.nameProduct || "объявление"}`}>Убрать</Button>

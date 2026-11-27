@@ -22,6 +22,8 @@ import { SiteHeader } from "@/components/layout/site-header"
 import { SiteFooter } from "@/components/layout/site-footer"
 import { MobileNavigation } from "@/components/layout/mobile-navigation"
 import { MyProductRow } from "./my-product-row"
+import { ProfileAvatar } from "./profile-avatar"
+import { profilePhoto } from "@/lib/profile-images"
 
 type ProfileValues = { name: string; description: string; phoneNumber: string }
 type ProfileErrors = Partial<Record<keyof ProfileValues, string>>
@@ -260,7 +262,7 @@ export function ProfilePage() {
           <div className="grid items-start gap-6 md:grid-cols-[240px_minmax(0,1fr)]">
             <aside className="rounded-[12px] border border-border bg-card p-4">
               <div className="mb-4 flex items-center gap-3">
-                <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-primary-50 font-semibold text-primary">{name.slice(0, 1).toLocaleUpperCase("ru")}</span>
+                <ProfileAvatar imageUrl={profilePhoto(profile)} name={name} className="size-11" />
                 <p className="min-w-0 font-semibold [overflow-wrap:anywhere]">{name}</p>
               </div>
               <nav aria-label="Разделы профиля" className="grid gap-1">

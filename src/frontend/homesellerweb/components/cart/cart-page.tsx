@@ -215,7 +215,7 @@ export function CartPage() {
                   </div>
                   {summary.hasUnknownPrices && <p className="text-xs/5 text-muted-foreground">Недоступные цены не включены в сумму.</p>}
                   {summary.hasNegotiablePrices && <p className="text-xs/5 text-muted-foreground">Товары с договорной ценой не включены в сумму. Уточните цену у продавца.</p>}
-                  <p className="text-xs/5 text-muted-foreground">Откройте объявление, чтобы связаться с продавцом.</p>
+                  <p className="text-xs/5 text-muted-foreground">Обсудите покупку с продавцом через кнопку у товара.</p>
                   {confirmClear ? (
                     <div className="space-y-2 border-t border-border pt-4">
                       <p className="text-sm/5">Убрать все товары из корзины?</p>
