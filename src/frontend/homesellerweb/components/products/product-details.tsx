@@ -23,6 +23,7 @@ import { MobileNavigation } from "@/components/layout/mobile-navigation"
 import { formatProductDate, formatProductPrice, productImageUrl } from "@/components/home/product-display"
 import { ProductGallery } from "./product-gallery"
 import { ContactActions } from "./contact-actions"
+import { AddToCartButton } from "./add-to-cart-button"
 
 type SellerProfile = ProfileResponse & { name?: string | null }
 
@@ -236,6 +237,7 @@ export function ProductDetails({ productId }: { productId: string }) {
                   {ownProduct && <p className="mt-4 text-sm text-muted-foreground">Это ваше объявление.</p>}
                   {hasSellerActions && <div className="mt-4 hidden md:block"><ContactActions onMessage={() => { void openChat() }} pending={contactPending} phone={phone} phoneVisible={phoneVisible} onRevealPhone={() => setPhoneVisible(true)} /></div>}
                   {contactError && <p role="alert" className="mt-3 text-sm/5 text-destructive">{contactError}</p>}
+                  {!ownProduct && <AddToCartButton key={product.id} productId={product.id} token={session.token} />}
                   <Button type="button" variant="secondary" className="mt-3 w-full" aria-pressed={favorite} loading={favoritePending} disabled={favoriteLoading || Boolean(session.token && !favoriteReady)} onClick={() => { void toggleFavorite() }}>
                     <Heart aria-hidden="true" className={favorite ? "fill-primary text-primary" : undefined} />
                     {favorite ? "В избранном" : "Добавить в избранное"}

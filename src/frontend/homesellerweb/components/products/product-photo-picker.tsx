@@ -51,7 +51,7 @@ export function ProductPhotoPicker({ photos, disabled, onAdd, onRemove, onCover 
                   <img src={photo.previewUrl} alt={`Фотография ${index + 1}`} className="size-full object-cover" />
                   <Button
                     type="button"
-                    size="icon-sm"
+                    size="icon"
                     variant="secondary"
                     disabled={disabled}
                     aria-label={`Удалить фотографию ${index + 1}`}
@@ -64,8 +64,8 @@ export function ProductPhotoPicker({ photos, disabled, onAdd, onRemove, onCover 
                 {index === 0 ? (
                   <p className="text-xs/4 text-muted-foreground">Обложка</p>
                 ) : (
-                  <Button type="button" size="sm" variant="text" disabled={disabled} onClick={() => onCover(photo.previewUrl)}>
-                    Сделать обложкой
+                  <Button type="button" size="sm" variant="text" className="h-auto min-h-11 w-full px-1 py-1" disabled={disabled} onClick={() => onCover(photo.previewUrl)}>
+                    <span className="whitespace-normal">Сделать обложкой</span>
                   </Button>
                 )}
               </li>

@@ -8,6 +8,8 @@ import { productService } from "@/services/product.service"
 import { attachProductToProfile } from "@/services/profile-products"
 import { ApiError } from "@/lib/http"
 import { readSession, type Session } from "@/lib/session"
+import { draftOwner, emptyPublicationValues, hasPublicationValues, readPublicationDraft, savePublicationDraft, removePublicationDraft, type PublicationValues } from "@/lib/drafts"
+import { readPublicationPhotos, savePublicationPhotos, removePublicationPhotos } from "@/lib/publication-photos"
 import { routes } from "@/lib/routes"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,14 +24,7 @@ import { SiteFooter } from "@/components/layout/site-footer"
 import { MobileNavigation } from "@/components/layout/mobile-navigation"
 import { ProductPhotoPicker, type ProductPhotoDraft } from "./product-photo-picker"
 
-type FormValues = {
-  nameProduct: string
-  description: string
-  price: string
-  position: string
-  tagId: string
-  conditionId: string
-}
+type FormValues = PublicationValues
 
 type FieldErrors = Partial<Record<keyof FormValues, string>>
 
@@ -51,9 +46,11 @@ export function ProductForm() {
   const [lookupLoading, setLookupLoading] = useState(true)
   const [lookupError, setLookupError] = useState(false)
   const [lookupRetry, setLookupRetry] = useState(0)
-  const [values, setValues] = useState<FormValues>({
-    nameProduct: "", description: "", price: "", position: "", tagId: "", conditionId: "",
-  })
+  const [values, setValues] = useState<FormValues>(emptyPublicationValues)
+  const [draftReady, setDraftReady] = useState(false)
+  const [draftNotice, setDraftNotice] = useState("")
+  const [textDraftError, setTextDraftError] = useState(false)
+  const [photoDraftError, setPhotoDraftError] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [photos, setPhotos] = useState<ProductPhotoDraft[]>([])
   const [photoError, setPhotoError] = useState("")
@@ -64,20 +61,120 @@ export function ProductForm() {
   const [stage, setStage] = useState("")
   const [createdId, setCreatedId] = useState<string | null>(null)
   const photoRef = useRef<ProductPhotoDraft[]>([])
+  const ownerRef = useRef<string | null>(null)
+  const valuesRef = useRef<FormValues>(emptyPublicationValues)
+  const createdRef = useRef<string | null>(null)
+  const checkRef = useRef<string | null>(null)
+  const draftReadyRef = useRef(false)
+  const draftClosed = useRef(false)
+  const textSaveFailed = useRef(false)
+  const photoSaveFailed = useRef(false)
+  const photoSavePending = useRef(false)
+  const photoVersion = useRef(0)
+  const expectedPhotoCount = useRef(0)
+  const photoRecoveryNeeded = useRef(false)
+  const restoreEpoch = useRef(0)
   const submitLock = useRef(false)
   const mounted = useRef(false)
   const formRef = useRef<HTMLFormElement>(null)
   const errorRef = useRef<HTMLParagraphElement>(null)
 
+  function persistDraft(next = valuesRef.current, createdId = createdRef.current) {
+    const owner = ownerRef.current
+    if (!draftReadyRef.current || draftClosed.current) return true
+    const saved = owner
+      ? savePublicationDraft(owner, { values: next, createdId, photoCount: photoRecoveryNeeded.current ? expectedPhotoCount.current : photoRef.current.length, checkPublication: checkRef.current })
+      : !hasPublicationValues(next) && photoRef.current.length === 0
+    textSaveFailed.current = !saved
+    if (mounted.current) setTextDraftError(!saved)
+    return saved
+  }
+
+  function updateCheckPublication(value: string | null) {
+    checkRef.current = value
+    setCheckPublication(value)
+    persistDraft()
+  }
+
   useEffect(() => {
     mounted.current = true
-    setSession(readSession())
+    const epoch = ++restoreEpoch.current
+    const active = () => mounted.current && epoch === restoreEpoch.current
+    draftReadyRef.current = false
+    setDraftReady(false)
+    const current = readSession()
+    const owner = draftOwner(current)
+    ownerRef.current = owner
+    setSession(current)
     setReady(true)
+    async function restore() {
+      if (owner) {
+        const { draft, available } = readPublicationDraft(owner)
+        textSaveFailed.current = !available
+        if (draft) {
+          expectedPhotoCount.current = draft.photoCount
+          valuesRef.current = draft.values
+          createdRef.current = draft.createdId
+          checkRef.current = draft.checkPublication
+          setValues(draft.values)
+          setCreatedId(draft.createdId)
+          setCheckPublication(draft.checkPublication)
+          submitLock.current = Boolean(draft.createdId)
+          setDraftNotice(draft.createdId ? "Это объявление уже опубликовано. Можно открыть его или завершить добавление в профиль." : "Черновик восстановлен.")
+          if (draft.photoCount > 0) {
+            try {
+              const saved = await readPublicationPhotos(owner)
+              if (!active()) return
+              updatePhotos(saved.map((photo) => ({ ...photo, previewUrl: URL.createObjectURL(photo.file) })))
+              if (saved.length !== draft.photoCount) { photoRecoveryNeeded.current = true; photoSaveFailed.current = true; setPhotoDraftError(true) }
+            } catch {
+              if (!active()) return
+              photoRecoveryNeeded.current = true
+              photoSaveFailed.current = true
+              setPhotoDraftError(true)
+            }
+          }
+        }
+      }
+      if (active()) { draftReadyRef.current = true; setDraftReady(true) }
+    }
+    void restore()
+    function beforeUnload(event: BeforeUnloadEvent) {
+      if (draftClosed.current) return
+      const textSaved = persistDraft()
+      const hasContent = hasPublicationValues(valuesRef.current) || photoRef.current.length > 0
+      if ((submitLock.current && !createdRef.current) || (hasContent && (!textSaved || photoSavePending.current || photoSaveFailed.current))) {
+        event.preventDefault()
+        event.returnValue = ""
+      }
+    }
+    window.addEventListener("beforeunload", beforeUnload)
     return () => {
+      persistDraft()
       mounted.current = false
+      restoreEpoch.current += 1
+      photoVersion.current += 1
+      window.removeEventListener("beforeunload", beforeUnload)
       photoRef.current.forEach((photo) => URL.revokeObjectURL(photo.previewUrl))
     }
   }, [])
+
+  useEffect(() => { if (draftReady) persistDraft() }, [values, photos, createdId, checkPublication, draftReady])
+
+  useEffect(() => {
+    const owner = ownerRef.current
+    if (!owner || !draftReady || draftClosed.current || photoRecoveryNeeded.current || (!photos.length && !photoSavePending.current)) return
+    const version = ++photoVersion.current
+    photoSavePending.current = true
+    void savePublicationPhotos(owner, photos)
+      .then(() => {
+        if (mounted.current && version === photoVersion.current) { photoSaveFailed.current = false; setPhotoDraftError(false) }
+      })
+      .catch(() => {
+        if (mounted.current && version === photoVersion.current) { photoSaveFailed.current = true; setPhotoDraftError(true) }
+      })
+      .finally(() => { if (version === photoVersion.current) photoSavePending.current = false })
+  }, [photos, draftReady])
 
   useEffect(() => {
     if (!session.token) return
@@ -116,14 +213,23 @@ export function ProductForm() {
   }, [error, photoError])
 
   function updateField(name: keyof FormValues, value: string) {
-    setValues((current) => ({ ...current, [name]: value }))
+    const next = { ...valuesRef.current, [name]: value }
+    valuesRef.current = next
+    setValues(next)
+    persistDraft(next)
     setFieldErrors((current) => ({ ...current, [name]: undefined }))
     setError("")
   }
 
   function updatePhotos(next: ProductPhotoDraft[]) {
+    if (draftReadyRef.current) photoRecoveryNeeded.current = false
     photoRef.current = next
     setPhotos(next)
+    persistDraft()
+    if (draftReadyRef.current && ownerRef.current) {
+      photoVersion.current += 1
+      photoSavePending.current = true
+    }
   }
 
   function addPhotos(files: File[]) {
@@ -157,7 +263,7 @@ export function ProductForm() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (submitLock.current || createdId || lookupLoading) return
+    if (submitLock.current || createdId || lookupLoading || !draftReady) return
     if (!session.token) { setLoginRequired(true); return }
 
     const price = values.price.trim() ? Number(values.price.replace(/\s/g, "").replace(",", ".")) : 0
@@ -180,7 +286,7 @@ export function ProductForm() {
     setPending(true)
     setPhotoError("")
     setLoginRequired(false)
-    setCheckPublication(null)
+    updateCheckPublication(null)
     let publishing = false
     let completed = false
     try {
@@ -209,16 +315,23 @@ export function ProductForm() {
         imageURLs,
       }
       publishing = true
+      updateCheckPublication(values.nameProduct.trim())
       setStage("Публикуем объявление…")
       const result = await productService.createProduct(request)
+      if (result?.id) {
+        completed = true
+        createdRef.current = result.id
+        checkRef.current = null
+        persistDraft(valuesRef.current, result.id)
+      }
       if (!mounted.current) return
       if (!result?.id) {
         setError("Ответ сервера не содержит номер объявления. Проверьте, появилось ли оно в каталоге.")
-        setCheckPublication(values.nameProduct.trim())
+        updateCheckPublication(values.nameProduct.trim())
         return
       }
-      completed = true
       setCreatedId(result.id)
+      setCheckPublication(null)
       setStage("Добавляем объявление в профиль…")
       try {
         await attachProductToProfile(result.id)
@@ -227,10 +340,15 @@ export function ProductForm() {
         return
       }
       if (!mounted.current) return
+      draftClosed.current = true
+      if (ownerRef.current) {
+        removePublicationDraft(ownerRef.current)
+        void removePublicationPhotos(ownerRef.current).catch(() => {})
+      }
       router.push(routes.product(result.id))
     } catch (failure) {
       if (!mounted.current) return
-      setCheckPublication(publishing ? values.nameProduct.trim() : null)
+      updateCheckPublication(publishing ? values.nameProduct.trim() : null)
       if (failure instanceof ApiError) {
         const mappedErrors: FieldErrors = {}
         for (const [key, messages] of Object.entries(failure.fieldErrors ?? {})) {
@@ -251,6 +369,25 @@ export function ProductForm() {
     }
   }
 
+  function startNew() {
+    if (pending) return
+    draftClosed.current = false
+    submitLock.current = false
+    createdRef.current = null
+    checkRef.current = null
+    valuesRef.current = emptyPublicationValues
+    setValues(emptyPublicationValues)
+    setCreatedId(null)
+    setCheckPublication(null)
+    photoRef.current.forEach((photo) => URL.revokeObjectURL(photo.previewUrl))
+    updatePhotos([])
+    setError("")
+    setFieldErrors({})
+    setPhotoError("")
+    setDraftNotice("")
+    persistDraft(emptyPublicationValues, null)
+  }
+
   return (
     <div className="flex min-h-dvh flex-col bg-background pb-[calc(64px_+_env(safe-area-inset-bottom))] text-foreground md:pb-0">
       <SiteHeader authenticated={Boolean(session.token)} />
@@ -263,8 +400,11 @@ export function ProductForm() {
           <>
             <Breadcrumbs className="mb-5" items={[{ label: "Главная", href: routes.home }, { label: "Подать объявление" }]} />
             <h1 className="text-2xl/8 font-bold">Новое объявление</h1>
+            {!draftReady && <p role="status" className="mt-3 text-sm text-muted-foreground">Восстанавливаем черновик…</p>}
+            {draftNotice && <p role="status" className="mt-3 text-sm text-primary">{draftNotice}</p>}
+            {(textDraftError || photoDraftError) && <p role="status" className="mt-3 text-sm/5 text-muted-foreground">{photoDraftError ? "Фотографии черновика не удалось сохранить или восстановить. При необходимости выберите их заново." : "Не удалось сохранить черновик в браузере. Сохраните введённый текст перед уходом со страницы."}</p>}
             <form ref={formRef} onSubmit={submit} noValidate aria-busy={pending} className="mt-6 space-y-5">
-              <fieldset disabled={pending || Boolean(createdId)} className="min-w-0 space-y-5">
+              <fieldset disabled={pending || Boolean(createdId) || !draftReady} className="min-w-0 space-y-5">
                 <section className="space-y-5 rounded-[12px] border border-border bg-card p-4 md:p-6">
                   <h2 className="text-lg/6 font-semibold">Основное</h2>
                   <Field data-invalid={Boolean(fieldErrors.nameProduct)}>
@@ -309,7 +449,7 @@ export function ProductForm() {
                 </section>
                 <section className="space-y-4 rounded-[12px] border border-border bg-card p-4 md:p-6">
                   <h2 className="text-lg/6 font-semibold">Фотографии</h2>
-                  <ProductPhotoPicker photos={photos} disabled={pending || Boolean(createdId)} onAdd={addPhotos} onRemove={removePhoto} onCover={chooseCover} />
+                  <ProductPhotoPicker photos={photos} disabled={pending || Boolean(createdId) || !draftReady} onAdd={addPhotos} onRemove={removePhoto} onCover={chooseCover} />
                 </section>
                 <section className="rounded-[12px] border border-border bg-card p-4 md:p-6">
                   <Field data-invalid={Boolean(fieldErrors.position)}>
@@ -326,11 +466,12 @@ export function ProductForm() {
               <div className="flex flex-wrap justify-end gap-3">
                 {createdId ? (
                   <>
+                    <Button type="button" variant="text" disabled={pending} onClick={startNew}>Создать ещё объявление</Button>
                     <Link href={`${routes.profile}?productId=${encodeURIComponent(createdId)}`} className={buttonVariants({ variant: "secondary" })}>Открыть профиль</Link>
                     <Link href={routes.product(createdId)} className={buttonVariants()}>Открыть объявление</Link>
                   </>
                 ) : (
-                  <Button type="submit" loading={pending} disabled={lookupLoading || !tags.length || !conditions.length}>Опубликовать</Button>
+                  <Button type="submit" loading={pending} disabled={!draftReady || lookupLoading || !tags.length || !conditions.length}>Опубликовать</Button>
                 )}
               </div>
             </form>

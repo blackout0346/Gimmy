@@ -1,15 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useRef, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
-import { MessageCircle, Send } from "lucide-react"
+import { ArrowLeft, ExternalLink, MessageCircle, Send } from "lucide-react"
 import { cn } from "cn"
 import type { ChatResponse } from "@/dtos/messenger/messenger.dto"
 import { messengerService } from "@/services/messenger.service"
 import { useMessenger } from "@/providers/MessengerProvider"
 import { readSession, type Session } from "@/lib/session"
 import { ApiError } from "@/lib/http"
+import { draftOwner, readMessageDraft, saveMessageDraft, clearSentMessageDraft } from "@/lib/drafts"
 import { routes } from "@/lib/routes"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,7 +44,10 @@ export function MessagesPage() {
   const [historyRetry, setHistoryRetry] = useState(0)
   const [historyError, setHistoryError] = useState("")
   const [draft, setDraft] = useState("")
-  const [sending, setSending] = useState(false)
+  const [sendingChatId, setSendingChatId] = useState<string | null>(null)
+  const [draftStorageError, setDraftStorageError] = useState(false)
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null)
+  const draftRef = useRef("")
   const [sendError, setSendError] = useState("")
   const [moreAvailable, setMoreAvailable] = useState(true)
   const activateChat = useRef(messenger.setActiveChat)
@@ -106,11 +110,43 @@ export function MessagesPage() {
     return () => { cancelled = true }
   }, [ready, session.token, selectedId, historyRetry])
 
+  const owner = draftOwner(session)
+  const sending = sendingChatId === selectedId && sendingChatId !== null
   useEffect(() => {
-    setDraft("")
+    const saved = owner && selectedId ? readMessageDraft(owner, selectedId) : { text: "", available: true }
+    draftRef.current = saved.text
+    setDraft(saved.text)
+    setDraftStorageError(!saved.available)
     setSendError("")
     setMoreAvailable(true)
-  }, [selectedId])
+  }, [selectedId, owner])
+
+  useEffect(() => {
+    const viewport = window.visualViewport
+    if (!viewport) return
+    function resize() { setViewportHeight(viewport?.height ?? null) }
+    resize()
+    viewport.addEventListener("resize", resize)
+    return () => viewport.removeEventListener("resize", resize)
+  }, [])
+
+  useEffect(() => {
+    function protect(event: BeforeUnloadEvent) {
+      if (!selectedRef.current || !draftRef.current) return
+      if (!owner || !saveMessageDraft(owner, selectedRef.current, draftRef.current)) {
+        event.preventDefault()
+        event.returnValue = ""
+      }
+    }
+    window.addEventListener("beforeunload", protect)
+    return () => window.removeEventListener("beforeunload", protect)
+  }, [owner])
+
+  function changeDraft(value: string) {
+    draftRef.current = value
+    setDraft(value)
+    setDraftStorageError(Boolean(value) && (!owner || !selectedId || !saveMessageDraft(owner, selectedId, value)))
+  }
 
   const chats = [...new Map([...initialChats, ...messenger.chats].map((chat) => [chat.id, chat] as const)).values()]
     .sort((a, b) => Date.parse(b.createAt) - Date.parse(a.createAt))
@@ -141,10 +177,12 @@ export function MessagesPage() {
       : chat.userName1 || "Собеседник"
   }
 
-  function chooseChat(chatId: string) {
+  function chooseChat(chatId: string | null) {
     const params = new URLSearchParams(window.location.search)
-    params.set("chatId", chatId)
-    window.history.pushState(null, "", `${routes.messages}?${params}`)
+    if (chatId) params.set("chatId", chatId)
+    else params.delete("chatId")
+    const suffix = params.toString()
+    window.history.pushState(null, "", `${routes.messages}${suffix ? `?${suffix}` : ""}`)
     selectedRef.current = chatId
     setSelectedId(chatId)
   }
@@ -155,16 +193,20 @@ export function MessagesPage() {
     if (!selectedId || !messages || !text || !connected || sendLock.current) return
     const chatId = selectedId
     sendLock.current = true
-    setSending(true)
+    setSendingChatId(chatId)
     setSendError("")
     try {
       await messenger.sendMessage({ chatId, senderName: session.login || "Покупатель", text })
-      if (mounted.current && selectedRef.current === chatId) setDraft("")
+      if (owner) clearSentMessageDraft(owner, chatId, draft)
+      if (mounted.current && selectedRef.current === chatId && draftRef.current === draft) {
+        draftRef.current = ""
+        setDraft("")
+      }
     } catch {
       if (mounted.current && selectedRef.current === chatId) setSendError("Не удалось отправить сообщение. Текст сохранён, попробуйте ещё раз.")
     } finally {
       sendLock.current = false
-      if (mounted.current) setSending(false)
+      if (mounted.current) setSendingChatId(null)
     }
   }
 
@@ -180,17 +222,17 @@ export function MessagesPage() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background pb-[calc(64px_+_env(safe-area-inset-bottom))] text-foreground md:pb-0">
+    <div style={viewportHeight ? { "--messenger-viewport": `${viewportHeight}px` } as CSSProperties : undefined} className="flex min-h-[var(--messenger-viewport,100dvh)] flex-col bg-background pb-[calc(64px_+_env(safe-area-inset-bottom))] text-foreground md:min-h-dvh md:pb-0">
       <SiteHeader authenticated={Boolean(session.token)} />
-      <main className="mx-auto w-full max-w-[1328px] flex-1 px-4 py-6 md:px-6">
-        <h1 className="mb-5 text-2xl/8 font-bold">Сообщения</h1>
+      <main className="mx-auto flex min-h-0 w-full max-w-[1328px] flex-1 flex-col px-4 py-3 md:px-6 md:py-6">
+        <h1 className={cn("mb-5 text-2xl/8 font-bold", selectedId && "sr-only md:not-sr-only md:mb-5")}>Сообщения</h1>
         {!ready ? <p role="status">Загрузка…</p> : !session.token || unauthorized ? (
           <EmptyState title="Войдите, чтобы открыть сообщения">
             <Link href={`${routes.login}?next=${encodeURIComponent(routes.messages + (selectedId ? `?chatId=${encodeURIComponent(selectedId)}` : ""))}`} className={buttonVariants()}>Войти</Link>
           </EmptyState>
         ) : (
-          <div className="grid gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
-            <section aria-label="Список чатов" className="max-h-72 overflow-y-auto rounded-[12px] border border-border bg-card md:max-h-[650px]">
+          <div className="grid min-h-0 gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
+            <section aria-label="Список чатов" className={cn("min-w-0 overflow-y-auto rounded-[12px] border border-border bg-card md:max-h-[650px]", selectedId && "hidden md:block")}>
               {loadingChats && <p role="status" className="p-4 text-sm text-muted-foreground">Загружаем чаты…</p>}
               {chatsError && <div role="alert" className="p-4 text-sm text-destructive">Не удалось загрузить чаты. <Button variant="text" size="sm" onClick={() => setRetry((value) => value + 1)}>Повторить</Button></div>}
               {!loadingChats && !chatsError && !chats.length && <p className="p-4 text-sm text-muted-foreground">Переписок пока нет.</p>}
@@ -205,16 +247,17 @@ export function MessagesPage() {
                 ))}
               </ul>
             </section>
-            <section aria-label="Переписка" className="flex h-[650px] max-h-[75dvh] min-h-96 min-w-0 flex-col overflow-hidden rounded-[12px] border border-border bg-card">
+            <section aria-label="Переписка" className={cn("h-[calc(var(--messenger-viewport,100dvh)_-_148px_-_env(safe-area-inset-bottom))] min-h-0 min-w-0 flex-col overflow-hidden rounded-[12px] border border-border bg-card md:flex md:h-[650px] md:max-h-[75dvh]", selectedId ? "flex" : "hidden")}>
               {!selectedId ? (
-                <div className="m-auto p-6 text-center text-sm text-muted-foreground">Выберите переписку слева или напишите продавцу на странице объявления.</div>
+                <div className="m-auto p-6 text-center text-sm text-muted-foreground">Выберите переписку или напишите продавцу на странице объявления.</div>
               ) : (
                 <>
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-4">
-                    <h2 className="font-semibold">{selected ? interlocutor(selected) : "Переписка"}</h2>
-                    {selected && <Link href={routes.product(selected.productId)} className="text-sm text-primary hover:text-primary-800">Открыть объявление</Link>}
+                  <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+                    <Button type="button" variant="ghost" size="icon" className="md:hidden" aria-label="К списку чатов" onClick={() => chooseChat(null)}><ArrowLeft aria-hidden="true" /></Button>
+                    <h2 className="min-w-0 flex-1 truncate font-semibold">{selected ? interlocutor(selected) : "Переписка"}</h2>
+                    {selected && <Link href={routes.product(selected.productId)} className={buttonVariants({ variant: "ghost", size: "icon" })} aria-label="Открыть объявление" title="Открыть объявление"><ExternalLink aria-hidden="true" /></Link>}
                   </div>
-                  <div role="status" className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-xs/4 text-muted-foreground">
+                  <div role="status" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-xs/4 text-muted-foreground">
                     {connected ? "Подключено" : "Подключение к сообщениям…"}
                     {!connected && <Button variant="text" size="sm" disabled={messenger.connectionState === "Connecting"} onClick={() => { void messenger.connect() }}>Подключиться</Button>}
                   </div>
@@ -242,11 +285,12 @@ export function MessagesPage() {
                     </ol>
                     <div ref={bottom} />
                   </div>
-                  <form onSubmit={submitMessage} className="border-t border-border p-3">
+                  <form onSubmit={submitMessage} className="shrink-0 border-t border-border p-3">
                     {sendError && <p role="alert" className="mb-2 text-sm text-destructive">{sendError}</p>}
+                    {draftStorageError && <p role="status" className="mb-2 text-xs/4 text-muted-foreground">Не удалось сохранить черновик в браузере. Скопируйте текст перед уходом.</p>}
                     <div className="flex min-w-0 items-center gap-2">
-                      <Input aria-label="Сообщение" placeholder="Напишите сообщение" value={draft} disabled={sending} onChange={(event) => setDraft(event.target.value)} className="min-w-0 flex-1" />
-                      <Button type="submit" size="icon" aria-label="Отправить сообщение" loading={sending} disabled={!connected || !draft.trim() || !messages}><Send /></Button>
+                      <Input aria-label="Сообщение" placeholder="Напишите сообщение" value={draft} disabled={sending} onChange={(event) => changeDraft(event.target.value)} className="min-w-0 flex-1" />
+                      <Button type="submit" size="icon" aria-label="Отправить сообщение" loading={sending} disabled={!connected || !draft.trim() || !messages || sendingChatId !== null}><Send /></Button>
                     </div>
                   </form>
                 </>
@@ -255,7 +299,7 @@ export function MessagesPage() {
           </div>
         )}
       </main>
-      <SiteFooter />
+      <div className={selectedId ? "hidden md:block" : undefined}><SiteFooter /></div>
       <MobileNavigation authenticated={Boolean(session.token)} active="messages" />
     </div>
   )

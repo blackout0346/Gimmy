@@ -66,7 +66,7 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
             move(event.key === "ArrowLeft" ? -1 : 1)
           }
         }}
-        className="fixed inset-0 m-auto w-[calc(100%_-_32px)] max-w-5xl rounded-[12px] border border-border bg-card p-3 text-foreground backdrop:bg-foreground/60"
+        className="fixed inset-0 m-auto max-h-[calc(100dvh_-_32px)] w-[calc(100%_-_32px)] max-w-5xl overflow-y-auto rounded-[12px] border border-border bg-card p-3 text-foreground backdrop:bg-foreground/60"
       >
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className="text-sm">Фото {index + 1} из {images.length}</p>
