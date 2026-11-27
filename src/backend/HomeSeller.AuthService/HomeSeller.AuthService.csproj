@@ -7,6 +7,7 @@
         <RootNamespace>HomeSellerServer</RootNamespace>
         <!-- Отключаем генератор OpenAPI, конфликтующий со Swashbuckle 11 -->
         <EnableOpenApiSourceGenerator>false</EnableOpenApiSourceGenerator>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     </PropertyGroup>
     <ItemGroup>
       <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
@@ -27,6 +28,12 @@
 
     <ItemGroup>
       <ProjectReference Include="..\HomeSeller.Shared\HomeSeller.Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="..\.dockerignore">
+        <Link>.dockerignore</Link>
+      </Content>
     </ItemGroup>
     <Target Name="RemoveOpenApiSourceGenerator" BeforeTargets="CoreCompile">
       <ItemGroup>

@@ -4,12 +4,22 @@ import { useEffect, useRef, useState } from 'react';
 import * as signalR from '@microsoft/signalr';
 import { authService } from '@/services/auth.service';
 import { productService } from '@/services/product.service';
+import { profileService } from '@/services/profile.service';
 import { cartService } from '@/services/cart.service';
 import { favoriteService } from '@/services/favorite.service';
 import { messengerService } from '@/services/messenger.service';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { useMessenger } from '@/providers/MessengerProvider';
-import { ProductsResponse } from '@/dtos/product/product.dto';
+import {
+  ConditionResponse,
+  ProductFilterRequest,
+  ProductsResponse,
+  TagResponse,
+} from '@/dtos/product/product.dto';
+import {
+  ProfileRequest,
+  ProfileResponse,
+} from '@/dtos/profile/profile.dto';
 import { CartResponse, FavoriteResponse } from '@/dtos/cart/cart.dto';
 import { tokenStorage } from '@/lib/http';
 
@@ -17,6 +27,8 @@ const MESSENGER_API_URL =
   process.env.NEXT_PUBLIC_MESSENGER_API_URL || 'http://localhost:5214';
 const PRODUCT_API_URL =
   process.env.NEXT_PUBLIC_PRODUCT_API_URL || 'http://localhost:5030';
+const PROFILE_API_URL =
+  process.env.NEXT_PUBLIC_PROFILE_API_URL || 'http://localhost:5050';
 
 const CONDITION_NEW = '11111111-1111-1111-1111-111111111111';
 const CONDITION_USED = '22222222-2222-2222-2222-222222222222';
@@ -60,12 +72,25 @@ const MOCK_PRODUCTS = [
   },
 ];
 
+const INITIAL_FILTER: ProductFilterRequest = {
+  search: '',
+  minPrice: undefined,
+  maxPrice: undefined,
+  conditionId: '',
+  tagIds: [],
+  position: '',
+  minRating: undefined,
+  sortBy: 'newest',
+  page: 1,
+  pageSize: 20,
+};
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function getProductImageUrl(url?: string | null): string | null {
+function resolveAssetUrl(baseUrl: string, url?: string | null): string | null {
   if (!url) return null;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `${PRODUCT_API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+  return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
 }
 
 function getCurrentUserIdFromToken(): string | null {
@@ -86,6 +111,28 @@ function getCurrentUserIdFromToken(): string | null {
   }
 }
 
+async function createMockAvatarFile(filename = 'avatar.png'): Promise<File> {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#4f46e5';
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 48px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('HS', 64, 64);
+  }
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, 'image/png')
+  );
+  return new File([blob || new Uint8Array([137, 80, 78, 71])], filename, {
+    type: 'image/png',
+  });
+}
+
 export function DashboardExample() {
   // Данные магазина и пользователя
   const [products, setProducts] = useState<ProductsResponse[]>([]);
@@ -95,6 +142,22 @@ export function DashboardExample() {
   const [favorites, setFavorites] = useState<FavoriteResponse | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Профиль пользователя
+  const [myProfile, setMyProfile] = useState<ProfileResponse | null>(null);
+  const [isProfileEditOpen, setIsProfileEditOpen] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profileDescription, setProfileDescription] = useState('');
+  const [profilePhoneNumber, setProfilePhoneNumber] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Фильтрация и справочники
+  const [conditions, setConditions] = useState<ConditionResponse[]>([]);
+  const [tags, setTags] = useState<TagResponse[]>([]);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [filter, setFilter] = useState<ProductFilterRequest>(INITIAL_FILTER);
 
   // Симуляция
   const [isSimulating, setIsSimulating] = useState(false);
@@ -159,19 +222,171 @@ export function DashboardExample() {
     console.error(fallback, err);
   };
 
-  const fetchProducts = async () => {
+  const syncProfileForm = (profile: ProfileResponse | null) => {
+    if (!profile) {
+      setProfileName('');
+      setProfileDescription('');
+      setProfilePhoneNumber('');
+      return;
+    }
+    setProfileName(profile.name ?? '');
+    setProfileDescription(profile.description ?? '');
+    setProfilePhoneNumber(profile.phoneNumber ?? '');
+  };
+
+  const fetchMyProfile = async () => {
+    if (!tokenStorage.get()) {
+      setMyProfile(null);
+      return null;
+    }
     try {
-      const data = await productService.getProducts();
+      const profile = await profileService.getMyProfile();
+      setMyProfile(profile);
+      syncProfileForm(profile);
+      return profile;
+    } catch (error) {
+      showError(error, 'Ошибка при загрузке профиля');
+      return null;
+    }
+  };
+
+  const fetchProducts = async (customFilter?: ProductFilterRequest) => {
+    try {
+      const activeFilter = customFilter ?? filter;
+      const data = await productService.getProducts(activeFilter);
       setProducts(data);
     } catch (error) {
       showError(error, 'Ошибка при загрузке товаров');
     }
   };
 
+  const fetchDictionaries = async () => {
+    try {
+      const [condList, tagList] = await Promise.all([
+        productService.getConditions(),
+        productService.getTags(),
+      ]);
+      setConditions(condList);
+      setTags(tagList);
+    } catch {
+      // Справочники опциональны
+    }
+  };
+
   useEffect(() => {
-    setCurrentUserId(getCurrentUserIdFromToken());
-    fetchProducts();
+    const uid = getCurrentUserIdFromToken();
+    setCurrentUserId(uid);
+    fetchProducts(INITIAL_FILTER);
+    fetchDictionaries();
+    if (uid) {
+      fetchMyProfile();
+    }
   }, []);
+
+  // --- Обработчики фильтров ---
+
+  const handleApplyFilter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nextFilter = { ...filter, page: 1 };
+    setFilter(nextFilter);
+    await fetchProducts(nextFilter);
+  };
+
+  const handleResetFilter = async () => {
+    setFilter(INITIAL_FILTER);
+    await fetchProducts(INITIAL_FILTER);
+  };
+
+  const handleToggleFilterTag = (tagId: string) => {
+    setFilter((prev) => {
+      const current = prev.tagIds ?? [];
+      const exists = current.includes(tagId);
+      return {
+        ...prev,
+        tagIds: exists
+          ? current.filter((id) => id !== tagId)
+          : [...current, tagId],
+      };
+    });
+  };
+
+  // --- Обработчики профиля ---
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setIsSavingProfile(true);
+    try {
+      const payload: ProfileRequest = {
+        name: profileName.trim() || loginInput,
+        description: profileDescription.trim() || null,
+        phoneNumber: profilePhoneNumber.trim() || null,
+      };
+
+      const saved = myProfile
+        ? await profileService.updateMyProfile(payload)
+        : await profileService.createProfile(payload);
+
+      setMyProfile(saved);
+      syncProfileForm(saved);
+      setIsProfileEditOpen(false);
+    } catch (error) {
+      showError(error, 'Ошибка при сохранении профиля');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleUploadProfileAvatar = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setErrorMsg(null);
+    setIsUploadingAvatar(true);
+    try {
+      await profileService.addImageToMyProfile(file);
+      await fetchMyProfile();
+    } catch (error) {
+      showError(error, 'Ошибка при загрузке фото профиля');
+    } finally {
+      setIsUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteProfileImage = async (imageId: string) => {
+    setErrorMsg(null);
+    try {
+      await profileService.deleteMyProfileImage(imageId);
+      await fetchMyProfile();
+    } catch (error) {
+      showError(error, 'Ошибка при удалении фото профиля');
+    }
+  };
+
+  const handleDeleteMyProfile = async () => {
+    setErrorMsg(null);
+    try {
+      await profileService.deleteMyProfile();
+      setMyProfile(null);
+      syncProfileForm(null);
+      setIsProfileEditOpen(false);
+    } catch (error) {
+      showError(error, 'Ошибка при удалении профиля');
+    }
+  };
+
+  const handleAttachProductToProfile = async (productId: string) => {
+    setErrorMsg(null);
+    try {
+      await profileService.addProductToMyProfile(productId);
+      await fetchMyProfile();
+    } catch (error) {
+      showError(error, 'Ошибка при привязке товара к профилю');
+    }
+  };
 
   const currentMessages = activeChatId ? messages[activeChatId] || [] : [];
   const currentTyping = activeChatId ? typingUsers[activeChatId] || [] : [];
@@ -233,6 +448,7 @@ export function DashboardExample() {
     try {
       await authService.login({ login: loginInput, password: passwordInput });
       setCurrentUserId(getCurrentUserIdFromToken());
+      await fetchMyProfile();
       const userCart = await cartService.getCart();
       setCart(userCart);
       const userFavorites = await favoriteService.getFavorite();
@@ -243,7 +459,7 @@ export function DashboardExample() {
     }
   };
 
-  // --- Симуляция ---
+  // --- Полная симуляция (Авторизация -> Профиль -> Товары -> Корзина -> Избранное -> Чат) ---
 
   const handleRunSimulation = async () => {
     setIsSimulating(true);
@@ -278,18 +494,54 @@ export function DashboardExample() {
       setCurrentUserId(uid);
       await connect();
       addSimLog('Успешный вход и подключение к SignalR.');
-      await sleep(400);
+      await sleep(350);
 
-      let dbConditions: { id: string; nameCondition: string }[] = [];
-      if (typeof (productService as any).getConditions === 'function') {
-        try {
-          dbConditions = await (productService as any).getConditions();
-          addSimLog(`Загружено состояний из БД: ${dbConditions.length}`);
-        } catch {
-          addSimLog(
-            'Не удалось загрузить состояния из БД, используем ID по умолчанию.'
-          );
-        }
+      // 1. Симуляция профиля
+      addSimLog('Проверка профиля пользователя...');
+      let currentProfile = await profileService.getMyProfile();
+      const profilePayload: ProfileRequest = {
+        name: `Продавец ${loginInput}`,
+        description: 'Надёжный продавец на HomeSeller. Быстрая отправка.',
+        phoneNumber: '+7 (999) 123-45-67',
+      };
+
+      if (!currentProfile) {
+        addSimLog('Профиль не найден — создаём новый профиль...');
+        currentProfile = await profileService.createProfile(profilePayload);
+      } else {
+        addSimLog('Профиль найден — обновляем данные профиля...');
+        currentProfile = await profileService.updateMyProfile(profilePayload);
+      }
+      setMyProfile(currentProfile);
+      syncProfileForm(currentProfile);
+      await sleep(300);
+
+      addSimLog('Загрузка аватара в профиль...');
+      try {
+        const avatarFile = await createMockAvatarFile('sim-avatar.png');
+        await profileService.addImageToMyProfile(avatarFile);
+        const refreshedProfile = await profileService.getMyProfile();
+        setMyProfile(refreshedProfile);
+        addSimLog('Фото профиля успешно загружено.');
+      } catch (imgErr) {
+        addSimLog(
+          `⚠️ Не удалось загрузить фото профиля: ${
+            imgErr instanceof Error ? imgErr.message : 'ошибка'
+          }`
+        );
+      }
+      await sleep(350);
+
+      // 2. Загрузка справочников и создание товаров с привязкой к профилю
+      let dbConditions: ConditionResponse[] = [];
+      try {
+        dbConditions = await productService.getConditions();
+        setConditions(dbConditions);
+        addSimLog(`Загружено состояний из БД: ${dbConditions.length}`);
+      } catch {
+        addSimLog(
+          'Не удалось загрузить состояния из БД, используем ID по умолчанию.'
+        );
       }
 
       for (let i = 0; i < MOCK_PRODUCTS.length; i++) {
@@ -299,35 +551,49 @@ export function DashboardExample() {
             ? dbConditions[i % dbConditions.length].id
             : item.conditionId;
 
-        addSimLog(`Добавление товара: ${item.nameProduct}...`);
-        await productService.createProduct({
+        addSimLog(`Создание товара: ${item.nameProduct}...`);
+        const createdProd = await productService.createProduct({
           ...item,
           conditionId,
         });
-        await sleep(350);
+
+        if (createdProd?.id) {
+          addSimLog(`Привязка товара "${item.nameProduct}" к профилю...`);
+          await profileService
+            .addProductToMyProfile(createdProd.id)
+            .catch(() => {});
+        }
+        await sleep(300);
       }
 
-      const updatedProducts = await productService.getProducts();
+      const finalProfile = await profileService.getMyProfile();
+      setMyProfile(finalProfile);
+
+      const updatedProducts = await productService.getProducts(filter);
       setProducts(updatedProducts);
       addSimLog(`Каталог обновлён (всего товаров: ${updatedProducts.length}).`);
-      await sleep(400);
+      await sleep(350);
 
+      // 3. Корзина
       const itemsForCart = updatedProducts.slice(0, 2);
       for (const prod of itemsForCart) {
         addSimLog(`В корзину: ${prod.nameProduct}`);
         await cartService.addToCart({ productId: prod.id, quantity: 1 });
-        await sleep(300);
+        await sleep(250);
       }
       const updatedCart = await cartService.getCart();
       setCart(updatedCart);
-      addSimLog(`Корзина обновлена (позиций: ${updatedCart?.cartItems.length ?? 0}).`);
-      await sleep(400);
+      addSimLog(
+        `Корзина обновлена (позиций: ${updatedCart?.cartItems.length ?? 0}).`
+      );
+      await sleep(350);
 
+      // 4. Избранное
       const itemsForFavorite = updatedProducts.slice(0, 2);
       for (const prod of itemsForFavorite) {
         addSimLog(`В избранное: ${prod.nameProduct}`);
         await favoriteService.addFavorite(prod.id);
-        await sleep(300);
+        await sleep(250);
       }
 
       let updatedFavorites = await favoriteService.getFavorite();
@@ -335,7 +601,7 @@ export function DashboardExample() {
       addSimLog(
         `Избранное загружено (товаров: ${updatedFavorites.productIds?.length ?? 0}).`
       );
-      await sleep(300);
+      await sleep(250);
 
       if (itemsForFavorite.length > 1) {
         const toRemove = itemsForFavorite[1];
@@ -345,9 +611,10 @@ export function DashboardExample() {
         addSimLog(
           `После удаления в избранном: ${updatedFavorites.productIds?.length ?? 0}.`
         );
-        await sleep(300);
+        await sleep(250);
       }
 
+      // 5. Мессенджер
       const firstProduct = updatedProducts[0];
       if (firstProduct) {
         addSimLog(`Открываем чат по товару "${firstProduct.nameProduct}"...`);
@@ -361,11 +628,11 @@ export function DashboardExample() {
         });
 
         await handleSelectChat(chat.id);
-        await sleep(500);
+        await sleep(400);
 
         addSimLog('Симуляция печати и отправка сообщения #1...');
         sendTypingStatus(chat.id, true);
-        await sleep(900);
+        await sleep(800);
         await sendMessage({
           chatId: chat.id,
           senderName: loginInput,
@@ -373,7 +640,7 @@ export function DashboardExample() {
           replyId: null,
         });
         sendTypingStatus(chat.id, false);
-        await sleep(700);
+        await sleep(600);
 
         addSimLog('Загрузка вложения и отправка сообщения #2...');
         const mockFile = new File(
@@ -391,7 +658,7 @@ export function DashboardExample() {
         });
       }
 
-      addSimLog('✅ Симуляция успешно завершена!');
+      addSimLog('✅ Полная симуляция (включая профиль) успешно завершена!');
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Ошибка симуляции';
       addSimLog(`❌ Ошибка: ${msg}`);
@@ -524,7 +791,7 @@ export function DashboardExample() {
     setErrorMsg(null);
     setIsCreatingProduct(true);
     try {
-      await productService.createProduct({
+      const created = await productService.createProduct({
         nameProduct: newProductName.trim(),
         price: Number(newProductPrice),
         description: newProductDescription.trim(),
@@ -533,6 +800,13 @@ export function DashboardExample() {
         imageURLs: ['https://picsum.photos/seed/newproduct/400/300'],
         tagIds: [],
       });
+
+      if (myProfile && created?.id) {
+        await profileService
+          .addProductToMyProfile(created.id)
+          .catch(() => {});
+        await fetchMyProfile();
+      }
 
       setNewProductName('');
       setNewProductPrice('');
@@ -673,6 +947,15 @@ export function DashboardExample() {
   const isSignalRConnected =
     connectionState === signalR.HubConnectionState.Connected;
 
+  // Извлечение полей строго по интерфейсу ProfileResponse
+  const profileImages = myProfile?.imageURLs ?? [];
+  const profileAvatarUrl = resolveAssetUrl(
+    PROFILE_API_URL,
+    profileImages[0]?.imageURL ?? null
+  );
+  const profileProductIds =
+    myProfile?.productUsers?.map((pu) => pu.productId) ?? [];
+
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
       {/* Верхняя панель статуса и авторизации */}
@@ -789,9 +1072,183 @@ export function DashboardExample() {
 
       {/* Основная сетка */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Левая колонка: Каталог, Добавление товара, Корзина, Уведомления */}
+        {/* Левая колонка: Профиль, Каталог с фильтрацией, Уведомления */}
         <div className="space-y-6 lg:col-span-5">
-          {/* Каталог и форма добавления */}
+          {/* Карточка профиля пользователя */}
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Мой профиль</h2>
+              {currentUserId && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsProfileEditOpen((prev) => !prev)}
+                    className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    {isProfileEditOpen
+                      ? 'Отмена'
+                      : myProfile
+                      ? 'Редактировать'
+                      : '+ Создать профиль'}
+                  </button>
+                  {myProfile && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteMyProfile}
+                      title="Удалить профиль"
+                      className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-600 transition hover:bg-rose-100"
+                    >
+                      Удалить
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {!currentUserId ? (
+              <p className="text-sm text-slate-400">
+                Войдите в аккаунт, чтобы управлять профилем.
+              </p>
+            ) : myProfile ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-indigo-50">
+                    {profileAvatarUrl ? (
+                      <img
+                        src={profileAvatarUrl}
+                        alt={myProfile.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-sm font-bold text-indigo-600">
+                        {(myProfile.name || loginInput)
+                          .slice(0, 2)
+                          .toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-slate-900">
+                      {myProfile.name}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">
+                      {myProfile.phoneNumber || 'Телефон не указан'}
+                    </p>
+                    <p className="mt-0.5 text-xs text-indigo-600">
+                      Товаров в профиле: {profileProductIds.length}
+                    </p>
+                  </div>
+
+                  <div>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleUploadProfileAvatar}
+                    />
+                    <button
+                      type="button"
+                      disabled={isUploadingAvatar}
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-200 disabled:opacity-50"
+                    >
+                      {isUploadingAvatar ? 'Загрузка...' : '📷 Фото'}
+                    </button>
+                  </div>
+                </div>
+
+                {myProfile.description && (
+                  <p className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-600">
+                    {myProfile.description}
+                  </p>
+                )}
+
+                {/* Галерея фото профиля с возможностью удаления */}
+                {profileImages.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {profileImages.map((img, idx) => {
+                      const imgUrl = resolveAssetUrl(
+                        PROFILE_API_URL,
+                        img.imageURL
+                      );
+                      if (!imgUrl) return null;
+                      return (
+                        <div
+                          key={img.id}
+                          className="group relative h-12 w-12 overflow-hidden rounded-lg border border-slate-200"
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={`Фото профиля ${idx + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProfileImage(img.id)}
+                            title="Удалить фото"
+                            className="absolute inset-0 hidden items-center justify-center bg-black/50 text-xs font-bold text-white group-hover:flex"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">
+                Профиль ещё не создан. Нажмите «+ Создать профиль» или запустите
+                симуляцию.
+              </p>
+            )}
+
+            {/* Форма создания / редактирования профиля */}
+            {isProfileEditOpen && currentUserId && (
+              <form
+                onSubmit={handleSaveProfile}
+                className="mt-4 space-y-2.5 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 text-xs"
+              >
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    placeholder="Имя / название магазина"
+                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:border-indigo-500 focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={profilePhoneNumber}
+                    onChange={(e) => setProfilePhoneNumber(e.target.value)}
+                    placeholder="Телефон (+7...)"
+                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <textarea
+                  rows={2}
+                  value={profileDescription}
+                  onChange={(e) => setProfileDescription(e.target.value)}
+                  placeholder="О себе / описание продавца"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:border-indigo-500 focus:outline-none"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSavingProfile}
+                    className="rounded-lg bg-indigo-600 px-3.5 py-1.5 font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {isSavingProfile ? 'Сохранение...' : 'Сохранить профиль'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+
+          {/* Каталог, фильтрация и добавление товара */}
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">
@@ -862,6 +1319,185 @@ export function DashboardExample() {
               </form>
             )}
 
+            {/* Поиск и фильтры */}
+            <form onSubmit={handleApplyFilter} className="mb-4 space-y-2.5">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={filter.search ?? ''}
+                  onChange={(e) =>
+                    setFilter((prev) => ({ ...prev, search: e.target.value }))
+                  }
+                  placeholder="Поиск по названию или описанию..."
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsFilterOpen((prev) => !prev)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                    isFilterOpen
+                      ? 'border-blue-300 bg-blue-50 text-blue-700'
+                      : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Фильтры
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700"
+                >
+                  Найти
+                </button>
+              </div>
+
+              {isFilterOpen && (
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      value={filter.minPrice ?? ''}
+                      onChange={(e) =>
+                        setFilter((prev) => ({
+                          ...prev,
+                          minPrice: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        }))
+                      }
+                      placeholder="Цена от (₽)"
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:border-blue-500 focus:outline-none"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      value={filter.maxPrice ?? ''}
+                      onChange={(e) =>
+                        setFilter((prev) => ({
+                          ...prev,
+                          maxPrice: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        }))
+                      }
+                      placeholder="Цена до (₽)"
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={filter.position ?? ''}
+                      onChange={(e) =>
+                        setFilter((prev) => ({
+                          ...prev,
+                          position: e.target.value,
+                        }))
+                      }
+                      placeholder="Город / локация"
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:border-blue-500 focus:outline-none"
+                    />
+                    <input
+                      type="number"
+                      min="1"
+                      max="5"
+                      step="0.5"
+                      value={filter.minRating ?? ''}
+                      onChange={(e) =>
+                        setFilter((prev) => ({
+                          ...prev,
+                          minRating: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        }))
+                      }
+                      placeholder="Мин. рейтинг (1-5)"
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={filter.conditionId ?? ''}
+                      onChange={(e) =>
+                        setFilter((prev) => ({
+                          ...prev,
+                          conditionId: e.target.value || undefined,
+                        }))
+                      }
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">Любое состояние</option>
+                      {conditions.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={filter.sortBy ?? 'newest'}
+                      onChange={(e) =>
+                        setFilter((prev) => ({
+                          ...prev,
+                          sortBy: e.target
+                            .value as ProductFilterRequest['sortBy'],
+                        }))
+                      }
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="newest">Сначала новые</option>
+                      <option value="price_asc">Дешевле</option>
+                      <option value="price_desc">Дороже</option>
+                      <option value="rating_desc">По рейтингу</option>
+                    </select>
+                  </div>
+
+                  {tags.length > 0 && (
+                    <div>
+                      <p className="mb-1.5 font-medium text-slate-600">Теги:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {tags.map((tag) => {
+                          const selected = filter.tagIds?.includes(tag.id);
+                          return (
+                            <button
+                              key={tag.id}
+                              type="button"
+                              onClick={() => handleToggleFilterTag(tag.id)}
+                              className={`rounded-full border px-2.5 py-0.5 transition ${
+                                selected
+                                  ? 'border-blue-600 bg-blue-600 text-white'
+                                  : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-100'
+                              }`}
+                            >
+                              {tag.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleResetFilter}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-slate-600 hover:bg-slate-100"
+                    >
+                      Сбросить
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-blue-600 px-3 py-1 font-medium text-white hover:bg-blue-700"
+                    >
+                      Применить
+                    </button>
+                  </div>
+                </div>
+              )}
+            </form>
+
             {/* Список товаров */}
             {products.length === 0 ? (
               <p className="text-sm text-slate-400">Товары не найдены</p>
@@ -869,7 +1505,11 @@ export function DashboardExample() {
               <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto pr-1">
                 {products.map((p) => {
                   const isFav = favorites?.productIds?.includes(p.id);
-                  const thumbUrl = getProductImageUrl(p.imageURLs?.[0]);
+                  const isInMyProfile = profileProductIds.includes(p.id);
+                  const thumbUrl = resolveAssetUrl(
+                    PRODUCT_API_URL,
+                    p.imageURLs?.[0]
+                  );
 
                   return (
                     <li
@@ -907,10 +1547,25 @@ export function DashboardExample() {
                             {p.price} ₽
                           </span>
                           {p.sellerLogin && <span>• {p.sellerLogin}</span>}
+                          {isInMyProfile && (
+                            <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">
+                              В профиле
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       <div className="flex shrink-0 gap-1.5">
+                        {myProfile && !isInMyProfile && (
+                          <button
+                            type="button"
+                            onClick={() => handleAttachProductToProfile(p.id)}
+                            title="Привязать к моему профилю"
+                            className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-xs font-medium text-indigo-600 transition hover:bg-indigo-100"
+                          >
+                            +Проф
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleToggleFavorite(p.id)}
@@ -969,7 +1624,7 @@ export function DashboardExample() {
         </div>
 
         {/* Правая колонка: Интерфейс Мессенджера */}
-        <section className="flex h-[680px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:col-span-7">
+        <section className="flex h-[780px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:col-span-7">
           {/* Сайдбар со списком чатов */}
           <aside className="flex w-1/3 flex-col border-r border-slate-200 bg-slate-50">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
@@ -1347,7 +2002,9 @@ export function DashboardExample() {
                 </h3>
                 <p className="text-xs text-slate-500">
                   Продавец: {selectedProduct.sellerLogin || 'Неизвестно'}
-                  {selectedProduct.position ? ` • ${selectedProduct.position}` : ''}
+                  {selectedProduct.position
+                    ? ` • ${selectedProduct.position}`
+                    : ''}
                 </p>
               </div>
               <button
@@ -1360,22 +2017,23 @@ export function DashboardExample() {
             </div>
 
             {/* Фотографии товара */}
-            {selectedProduct.imageURLs && selectedProduct.imageURLs.length > 0 && (
-              <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-                {selectedProduct.imageURLs.map((rawUrl, idx) => {
-                  const fullUrl = getProductImageUrl(rawUrl);
-                  if (!fullUrl) return null;
-                  return (
-                    <img
-                      key={idx}
-                      src={fullUrl}
-                      alt={`${selectedProduct.nameProduct} ${idx + 1}`}
-                      className="h-44 w-full shrink-0 rounded-xl border border-slate-200 object-cover"
-                    />
-                  );
-                })}
-              </div>
-            )}
+            {selectedProduct.imageURLs &&
+              selectedProduct.imageURLs.length > 0 && (
+                <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+                  {selectedProduct.imageURLs.map((rawUrl, idx) => {
+                    const fullUrl = resolveAssetUrl(PRODUCT_API_URL, rawUrl);
+                    if (!fullUrl) return null;
+                    return (
+                      <img
+                        key={idx}
+                        src={fullUrl}
+                        alt={`${selectedProduct.nameProduct} ${idx + 1}`}
+                        className="h-44 w-full shrink-0 rounded-xl border border-slate-200 object-cover"
+                      />
+                    );
+                  })}
+                </div>
+              )}
 
             <div className="mb-4 text-2xl font-bold text-blue-600">
               {selectedProduct.price} ₽

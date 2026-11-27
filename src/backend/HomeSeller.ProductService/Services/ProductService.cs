@@ -186,7 +186,7 @@ public class ProductService : IProductService
                 {
                     Id = Guid.NewGuid(),
                     ProductId = productid,
-                    ImageURL = img.Trim()
+                    ImageURL = img.Trim(),
                 }).ToList() ?? new List<ProductImage>(),
 
             ProductTags = request.TagIds?.Select(tagId => new ProductTag
