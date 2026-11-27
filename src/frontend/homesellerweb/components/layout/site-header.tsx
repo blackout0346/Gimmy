@@ -1,12 +1,13 @@
 import Link from "next/link"
 import { cn } from "cn"
 import type { ReactNode } from "react"
-import { Heart, Plus, ShoppingCart } from "lucide-react"
+import { Heart, Plus } from "lucide-react"
 import { buttonVariants } from "@/components/ui/button"
 import { routes } from "@/lib/routes"
 import { NotificationBell } from "@/components/notifications/notification-bell"
 import { AccountAvatar } from "@/components/profile/profile-avatar"
 import { MessagesLink } from "@/components/messages/messages-link"
+import { CartLink } from "@/components/cart/cart-link"
 
 type SiteHeaderProps = {
   authenticated: boolean
@@ -22,7 +23,7 @@ export function SiteHeader({ authenticated, search, categoryNavigation }: SiteHe
           Gimmy<span className="text-primary">.</span>
         </Link>
         <div className="col-start-2 row-start-1 flex items-center gap-2 md:hidden">
-          <Link href={routes.cart} prefetch={false} aria-label="Корзина" className={buttonVariants({ variant: "ghost", size: "icon" })}><ShoppingCart aria-hidden="true" /></Link>
+          <CartLink />
           {authenticated && <NotificationBell />}
           <Link href={authenticated ? routes.profile : routes.login} prefetch={false} aria-label={authenticated ? "Профиль" : undefined} className={buttonVariants({ variant: "secondary", size: authenticated ? "icon" : "default" })}>
             {authenticated ? <AccountAvatar /> : "Войти"}
@@ -38,7 +39,7 @@ export function SiteHeader({ authenticated, search, categoryNavigation }: SiteHe
         </div>
         <nav aria-label="Действия пользователя" className="hidden items-center gap-1 md:col-start-3 md:row-start-1 md:flex md:justify-self-end min-[1200px]:gap-2">
           <Link href={routes.favorites} prefetch={false} aria-label="Избранное" className={buttonVariants({ variant: "ghost", size: "icon" })}><Heart aria-hidden="true" /></Link>
-          <Link href={routes.cart} prefetch={false} aria-label="Корзина" className={buttonVariants({ variant: "ghost", size: "icon" })}><ShoppingCart aria-hidden="true" /></Link>
+          <CartLink />
           <MessagesLink />
           {authenticated && <NotificationBell />}
           {authenticated ? (

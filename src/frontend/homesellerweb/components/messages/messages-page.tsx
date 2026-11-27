@@ -322,8 +322,7 @@ export function MessagesPage() {
                 <>
                   <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
                     <Button type="button" variant="ghost" size="icon" className="md:hidden" aria-label="К списку чатов" onClick={() => chooseChat(null)}><ArrowLeft aria-hidden="true" /><MessageUnreadBadge announce={false} /></Button>
-                    {selected && <ProfileAvatar userId={interlocutorId(selected)} name={interlocutor(selected)} className="size-8" />}
-                    <h2 className="min-w-0 flex-1 truncate font-semibold">{selected ? interlocutor(selected) : "Переписка"}</h2>
+                    {selected ? <Link href={routes.userProfile(interlocutorId(selected))} className="flex min-w-0 flex-1 items-center gap-2 rounded-[10px] hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" aria-label={`Открыть профиль: ${interlocutor(selected)}`}><ProfileAvatar userId={interlocutorId(selected)} name={interlocutor(selected)} className="size-8" /><h2 className="truncate font-semibold">{interlocutor(selected)}</h2></Link> : <h2 className="min-w-0 flex-1 truncate font-semibold">Переписка</h2>}
                     {selected && <Link href={routes.product(selected.productId)} className={buttonVariants({ variant: "ghost", size: "icon" })} aria-label="Открыть объявление" title="Открыть объявление"><ExternalLink aria-hidden="true" /></Link>}
                   </div>
                   <div role="status" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-xs/4 text-muted-foreground">

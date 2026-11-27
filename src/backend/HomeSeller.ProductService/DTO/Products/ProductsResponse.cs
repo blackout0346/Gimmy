@@ -20,5 +20,7 @@ public class ProductsResponse
 
     public double AverageRating { get; set; }
     public int RatingsCount { get; set; }
+
+    public string Position { get; set; } = string.Empty;
     public List<string> Tags { get; set; } = new();
 }

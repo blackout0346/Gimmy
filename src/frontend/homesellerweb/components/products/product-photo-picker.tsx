@@ -1,7 +1,7 @@
 "use client"
 
 import type { ChangeEvent } from "react"
-import { ImagePlus, X } from "lucide-react"
+import { ImageOff, ImagePlus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export type ProductPhotoDraft = {
@@ -11,7 +11,7 @@ export type ProductPhotoDraft = {
 }
 
 type ProductPhotoPickerProps = {
-  photos: ProductPhotoDraft[]
+  photos: ReadonlyArray<Pick<ProductPhotoDraft, "previewUrl"> & { unavailable?: boolean }>
   disabled: boolean
   onAdd: (files: File[]) => void
   onRemove: (previewUrl: string) => void
@@ -47,8 +47,10 @@ export function ProductPhotoPicker({ photos, disabled, onAdd, onRemove, onCover 
             {photos.map((photo, index) => (
               <li key={photo.previewUrl} className="min-w-0 space-y-2">
                 <div className="relative aspect-[4/3] overflow-hidden rounded-[10px] border border-border bg-muted">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.previewUrl} alt={`Фотография ${index + 1}`} className="size-full object-cover" />
+                  {photo.unavailable ? <span className="grid size-full place-items-center text-muted-foreground"><ImageOff aria-label={`Фотография ${index + 1} недоступна`} className="size-6" /></span> : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={photo.previewUrl} alt={`Фотография ${index + 1}`} className="size-full object-cover" />
+                  )}
                   <Button
                     type="button"
                     size="icon"

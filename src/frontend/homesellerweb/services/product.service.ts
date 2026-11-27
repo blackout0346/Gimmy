@@ -67,6 +67,7 @@ export const productService = {
   async getProductById(productId: string): Promise<ProductsResponse> {
     return apiFetch<ProductsResponse>(`${BASE_URL}/GetProduct/${productId}`, {
       method: 'GET',
+      cache: 'no-store',
       auth: false,
     });
   },

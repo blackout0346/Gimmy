@@ -5,6 +5,7 @@ import { AUTH_CHANGE_EVENT, tokenStorage } from "@/lib/http"
 import { MessengerProvider } from "@/providers/MessengerProvider"
 import { MessageNotificationBridge } from "@/components/notifications/message-notification-bridge"
 import { NotificationProvider } from "@/providers/NotificationProvider"
+import { CartProvider } from "@/providers/CartProvider"
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
@@ -32,8 +33,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <NotificationProvider key={token ?? "guest"}>
       <MessengerProvider isAuthenticated={Boolean(token)}>
-        <MessageNotificationBridge />
-        {children}
+        <CartProvider token={token}>
+          <MessageNotificationBridge />
+          {children}
+        </CartProvider>
       </MessengerProvider>
     </NotificationProvider>
   )

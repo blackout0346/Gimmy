@@ -444,6 +444,7 @@ public class ProductService : IProductService
         NameProduct = products.NameProduct,
         ConditionId = products.ConditionId,
         NameCondition = products.Condition?.NameCondition ?? string.Empty,
+        Position = products.Position ?? string.Empty,
         AverageRating = rating.averageRating,
         RatingsCount = rating.ratingCount,
         Tags = products.ProductTags?

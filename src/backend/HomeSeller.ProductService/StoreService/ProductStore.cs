@@ -182,8 +182,8 @@ public class ProductStore : IProductStore
             var imagestoadd = products.ImageURLs.Where(img => !currenturl.Contains(img.ImageURL)).ToList();
             foreach (var img in imagestoadd)
             {
-                img.ProductId = products.Id;
-                existingProduct.ImageURLs.Add(img);
+                img.ProductId = existingProduct.Id;
+                _dbcontext.Set<ProductImage>().Add(img);
             }
         }
 
@@ -205,7 +205,8 @@ public class ProductStore : IProductStore
 
             foreach (var tag in tagsToAdd)
             {
-                existingProduct.ProductTags.Add(tag);
+                tag.ProductId = existingProduct.Id;
+                _dbcontext.Set<ProductTag>().Add(tag);
             }
         }
 

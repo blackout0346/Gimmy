@@ -236,7 +236,7 @@ export function ProductDetails({ productId }: { productId: string }) {
                   <p className="mt-2 text-[28px]/[36px] font-bold [overflow-wrap:anywhere]">{formatProductPrice(product.price)}</p>
                   {product.position && <p className="mt-3 flex items-start gap-2 text-sm/5 text-muted-foreground"><MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0" />{product.position}</p>}
                   {published && <p className="mt-1 text-xs/4 text-muted-foreground">Опубликовано <time dateTime={product.createAt}>{published}</time></p>}
-                  {ownProduct && <p className="mt-4 text-sm text-muted-foreground">Это ваше объявление.</p>}
+                  {ownProduct && <div className="mt-4"><p className="mb-3 text-sm text-muted-foreground">Это ваше объявление.</p><Link href={routes.editProduct(product.id)} className={`${buttonVariants({ variant: "soft" })} w-full`}>Редактировать объявление</Link></div>}
                   {hasSellerActions && <div className="mt-4 hidden md:block"><ContactActions onMessage={() => { void openChat() }} pending={contactPending} phone={phone} phoneVisible={phoneVisible} onRevealPhone={() => setPhoneVisible(true)} /></div>}
                   {contactError && <p role="alert" className="mt-3 text-sm/5 text-destructive">{contactError}</p>}
                   {!ownProduct && <AddToCartButton key={product.id} productId={product.id} token={session.token} />}
@@ -247,10 +247,10 @@ export function ProductDetails({ productId }: { productId: string }) {
                   {favoriteError && <div role="alert" className="mt-3 text-sm/5 text-destructive">{favoriteError} {!favoriteReady && <Button variant="text" size="sm" onClick={() => setFavoriteRetry((value) => value + 1)}>Повторить</Button>}</div>}
                 </section>
                 <section aria-label="Продавец" className="rounded-[12px] border border-border bg-card p-4 md:p-6">
-                  <div className="flex items-center gap-3">
+                  <Link href={ownProduct ? routes.profile : routes.userProfile(product.userId)} className="flex items-center gap-3 rounded-[10px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
                     <ProfileAvatar imageUrl={profilePhoto(seller)} name={sellerName} className="size-11" />
-                    <div className="min-w-0"><h2 className="font-semibold [overflow-wrap:anywhere]">{sellerName}</h2>{sellerSince && <p className="text-xs/4 text-muted-foreground">На сайте с {sellerSince}</p>}</div>
-                  </div>
+                    <div className="min-w-0"><h2 className="font-semibold hover:text-primary [overflow-wrap:anywhere]">{sellerName}</h2>{sellerSince && <p className="text-xs/4 text-muted-foreground">На сайте с {sellerSince}</p>}<span className="mt-1 block text-xs/4 text-primary">Открыть профиль</span></div>
+                  </Link>
                   {seller?.description && <p className="mt-3 whitespace-pre-wrap text-sm/5 [overflow-wrap:anywhere]">{seller.description}</p>}
                   {sellerError && <div role="status" className="mt-3 text-xs/4 text-muted-foreground">Данные профиля временно недоступны. <Button variant="text" size="sm" onClick={() => setSellerRetry((value) => value + 1)}>Повторить</Button></div>}
                 </section>

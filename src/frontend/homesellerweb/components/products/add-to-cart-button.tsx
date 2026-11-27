@@ -7,6 +7,7 @@ import { ShoppingCart } from "lucide-react"
 import { cartService } from "@/services/cart.service"
 import { ApiError } from "@/lib/http"
 import { routes } from "@/lib/routes"
+import { notifyCartChanged } from "@/lib/cart-events"
 import { cartContains } from "@/components/cart/cart-data"
 import { Button, buttonVariants } from "@/components/ui/button"
 
@@ -76,7 +77,7 @@ export function AddToCartButton({ productId, token }: { productId: string; token
         submitted = true
         await cartService.addToCart({ productId, quantity: 1 })
       }
-      if (active()) { setInCart(true); setNotice("Товар в корзине.") }
+      if (active()) { setInCart(true); setNotice("Товар в корзине."); notifyCartChanged(token) }
     } catch (failure) {
       if (!active()) return
       if (failure instanceof ApiError && failure.status === 401) { login(); return }
@@ -88,6 +89,7 @@ export function AddToCartButton({ productId, token }: { productId: string; token
           if (cartContains(current, productId)) {
             setInCart(true)
             setNotice("Товар в корзине.")
+            notifyCartChanged(token)
             return
           }
         } catch {

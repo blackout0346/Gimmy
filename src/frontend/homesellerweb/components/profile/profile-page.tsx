@@ -337,7 +337,10 @@ export function ProfilePage() {
                                 <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => setConfirmDelete(null)}>Отмена</Button>
                               </>
                             ) : (
+                              <>
+                              <Link href={routes.editProduct(item.product.id)} className={buttonVariants({ variant: "secondary", size: "sm" })} aria-disabled={busy} tabIndex={busy ? -1 : undefined} onClick={(event) => { if (busy) event.preventDefault() }}>Редактировать</Link>
                               <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => setConfirmDelete(item.id)}>Удалить</Button>
+                              </>
                             )}
                           </MyProductRow> : (
                             <div className="rounded-[12px] border border-border bg-card p-4 text-sm">
